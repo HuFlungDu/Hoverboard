@@ -17,6 +17,7 @@ import base64
 import clippacloud
 from clippacloud import exceptions
 from clippacloud import clipcatcher
+from clippacloud import config
 
 class FileDescription(object):
     def __init__(self,path,modified,size):
@@ -119,7 +120,7 @@ class DropboxBackend(Backend):
         contents = metadata["contents"]
         for filedata in contents:
             if not filedata["is_dir"]:
-                files.append(FileDescription(filedata["path"],filedata["modified"],filedata["bytes"]))
+                files.append(FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"]))
         return files
 
     def get_connection_data(self):
@@ -345,17 +346,24 @@ def main():
             #initwindow.connect("destroy", on_kill)
     clippacloud.backend = backend
     global modified
-    modified = str(datetime.datetime.min)
+    modified = datetime.datetime.min
     def idle_func():
         global modified
         if not paused[0]:
             cp = gtk.clipboard_get()
             clipcatcher.try_catch_clip(cp,backend)
-            filedesc = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified, reverse=True)[0]
-            if filedesc.modified > modified:
-                clippacloud.actions.set_clipboard_from_cloud(cp)
-                modified = filedesc.modified
-            cp.store()
+            files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
+            if files:
+                filedesc = files[-1]
+                if filedesc.modified > modified:
+                    clippacloud.actions.set_clipboard_from_cloud(cp)
+                    modified = filedesc.modified
+                cp.store()
+                totalsize = sum(x.size for x in files)
+                while totalsize > config.max_size:
+                    clippacloud.backend.remove_file(files[0].path)
+                    files = files[1:]
+                    totalsize = sum(x.size for x in files)
         return True
     gobject.timeout_add(1000,idle_func)
     try:

@@ -5,6 +5,7 @@ import time
 import datetime
 import os
 import tempfile
+from clippacloud import config
 
 content = None
 
@@ -52,11 +53,13 @@ def catch_clip(clipboard,backend):
         with open(tmppath,"rb") as pngfile:
             data = pngfile.read()
         os.remove(tmppath)
-        backend.save_data(data,filename)
+        if len(data) < config.max_size:
+            backend.save_data(data,filename)
         
     elif isinstance(content,str):
         filename += ".txt"
-        backend.save_data(content,filename)
+        if len(content) < config.max_size:
+            backend.save_data(content,filename)
         #with open(path,'w') as clipfile:
         #    clipfile.write(content)
 
@@ -73,12 +76,14 @@ def try_catch_clip(clipboard,backend):
         with open(tmppath,"rb") as pngfile:
             data = pngfile.read()
         os.remove(tmppath)
-        backend.save_data(data,filename)
+        if len(data) < config.max_size:
+            backend.save_data(data,filename)
         return True
         
     elif isinstance(content,str):
         filename += ".txt"
-        backend.save_data(content,filename)
+        if len(content) < config.max_size:
+            backend.save_data(content,filename)
         return True
         #with open(path,'w') as clipfile:
         #    clipfile.write(content)
