@@ -1,6 +1,7 @@
 #from gi.repository import Gtk, Gdk, GObject
 import gtk
 import gobject
+import wx
 import dropbox
 from dropbox import client, rest, session
 import os
@@ -12,12 +13,15 @@ import tempfile
 import datetime
 import time
 import base64
+import functools
 
 
 import clippacloud
 from clippacloud import exceptions
 from clippacloud import clipcatcher
 from clippacloud import config
+
+backend = None
 
 class FileDescription(object):
     def __init__(self,path,modified,size):
@@ -32,16 +36,48 @@ class Backend(object):
     #def connect(self):
     #    raise NotImplementedError
 
-class DropboxUrlWindow(gtk.Dialog):
+class MainApp(wx.App):
+    def OnInit(self):
+        self.keepGoing = True
+        return True
+
+    def main_quit(self):
+        self.keepGoing = False
+
+    def MainLoop(self):
+        evtloop = wx.EventLoop()
+        old = wx.EventLoop.GetActive()
+        wx.EventLoop.SetActive(evtloop)
+        while self.keepGoing:
+            while evtloop.Pending():
+                evtloop.Dispatch()
+            time.sleep(0.10)
+            #evtloop.ProcessIdle()
+
+        wx.EventLoop.SetActive(old)
+        self.keepGoing = True
+
+class DropboxUrlWindow(wx.Dialog):
     def __init__(self,url,session, token):
-        link = gtk.LinkButton(url,"Follow this link to activate the app")
-        gtk.Dialog.__init__(self,"Authorize the app",
-                                 None,
-                                 gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
-                                 (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                                  gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
-        self.vbox.pack_start(link,False,False,0)
-        #GObject.timeout_add(1000,self.check_auth)
+        wx.Dialog.__init__(self,None,-1,"Authorize the app")
+        panel = wx.Panel(self, -1)
+        link = wx.HyperlinkCtrl(panel,-1,"Follow this link to activate the app",url)
+        mainvbox = wx.BoxSizer(wx.VERTICAL)
+        mainvbox.Add(link)
+        ok_button = wx.Button(panel, wx.ID_OK)
+        cancel_button = wx.Button(panel, wx.ID_CANCEL)
+        button_sizer = wx.StdDialogButtonSizer()
+        button_sizer.AddButton(ok_button)
+        button_sizer.AddButton(cancel_button)
+        button_sizer.Realize()
+        if button_sizer:
+            mainvbox.Add(button_sizer,wx.ALIGN_RIGHT)
+
+        border = wx.BoxSizer()
+        border.Add(mainvbox, 0, wx.ALL, 15)
+        panel.SetSizerAndFit(border)
+        self.Fit()
+
 
 class DropboxBackend(Backend):
     name = "Dropbox"
@@ -72,14 +108,15 @@ class DropboxBackend(Backend):
 
         urlwindow = DropboxUrlWindow(url,sess,request_token)
         #urlwindow.set_transient_for(self)
-        urlwindow.show_all()
-        response = urlwindow.run()
+        response = urlwindow.ShowModal()
+        urlwindow.Destroy()
+        #response = urlwindow.run()
         self.access_token = None
-        if response == gtk.RESPONSE_ACCEPT:
+        if response == wx.ID_OK:
             self.access_token = sess.obtain_access_token(request_token)
             self.client = client.DropboxClient(sess)
 
-        urlwindow.destroy()
+        #urlwindow.destroy()
 
         if not self.access_token:
             raise exceptions.FailedToCreateBackend
@@ -227,57 +264,95 @@ with open(settingsfilepath,'r') as settingsfile:
 # webbrowser.open_new_tab(url)
 # access_token = sess.obtain_access_token(request_token)
 
-class InitBackendWindow(gtk.Window):
+class InitBackendWindow(wx.Frame):
     def __init__(self,settings, backends):
-        gtk.Window.__init__(self)
-        self.set_title("Initialize Backend")
-        mainvbox = gtk.VBox()
+        wx.Frame.__init__(self,None,-1,"Initialize Backend")
+        panel = wx.Panel(self, -1)
+
+        backendlabel = wx.StaticText(panel, -1, "Choose backend:")
+        backend_combo = wx.Choice(panel, -1, choices=[backend.name for backend in backends])
+
+        backend_combo.SetStringSelection(backends[0].name)
+
+        ok_button = wx.Button(panel, wx.ID_OK)
+        ok_button.Bind(wx.EVT_BUTTON,functools.partial(self.on_ok_button_clicked,backend_combo))
+        cancel_button = wx.Button(panel, wx.ID_CANCEL)
+        cancel_button.Bind(wx.EVT_BUTTON,self.on_cancel_button_clicked)
+
+        sizer = wx.FlexGridSizer(2, 2, 5, 5)
+        sizer.AddGrowableCol(1)
+        sizer.Add(backendlabel,flag=wx.ALIGN_CENTER_VERTICAL)
+        sizer.Add(backend_combo, flag=wx.EXPAND)
+        box = wx.BoxSizer()
+
+        box.Add(cancel_button, flag=wx.ALIGN_RIGHT)
+        box.Add(ok_button, flag=wx.ALIGN_RIGHT)
+
+        sizer.Add(wx.BoxSizer())
+        sizer.Add(box,flag=wx.ALIGN_RIGHT)
+
+
+        border = wx.BoxSizer()
+        border.Add(sizer, 0, wx.ALL, 15)
+        panel.SetSizerAndFit(border)
+        self.Fit()
+
+        #mainvbox = gtk.VBox()
 
         #self.maingrid = gtk.Grid()
-        backendhbox = gtk.HBox()
-        backendlabel = gtk.Label("Choose backend:")
-        maincombo = gtk.combo_box_new_text()
-        for backend in backends:
-            maincombo.append_text(backend.name)
-        maincombo.set_active(0)
-        backendhbox.pack_start(backendlabel,False,True,0)
-        backendhbox.pack_start(maincombo,True,True,0)
-        buttonhbox = gtk.HBox()
-        okbutton = gtk.Button(stock = gtk.STOCK_OK)
-        cancelbutton = gtk.Button(stock = gtk.STOCK_CANCEL)
-        buttonhbox.pack_start(cancelbutton,True,False,0)
-        buttonhbox.pack_start(okbutton,False,False,0)
-        mainvbox.pack_start(backendhbox,False,False,0)
-        mainvbox.pack_start(buttonhbox,False,False,0)
+        #backendhbox = gtk.HBox()
+        #backendlabel = gtk.Label("Choose backend:")
+        #maincombo = gtk.combo_box_new_text()
+        #for backend in backends:
+        #    maincombo.append_text(backend.name)
+        #maincombo.set_active(0)
+        #backendhbox.pack_start(backendlabel,False,True,0)
+        #backendhbox.pack_start(maincombo,True,True,0)
+        #buttonhbox = gtk.HBox()
+        #okbutton = gtk.Button(stock = gtk.STOCK_OK)
+        #cancelbutton = gtk.Button(stock = gtk.STOCK_CANCEL)
+        #buttonhbox.pack_start(cancelbutton,True,False,0)
+        #buttonhbox.pack_start(okbutton,False,False,0)
+        #mainvbox.pack_start(backendhbox,False,False,0)
+        #mainvbox.pack_start(buttonhbox,False,False,0)
         #self.maingrid.attach(backendlabel,0,0,1,1)
         #self.maingrid.attach(maincombo,1,0,2,1)
         #self.maingrid.attach(okbutton,2,1,1,1)
         #self.maingrid.attach(cancelbutton,1,1,1,1)
-        self.add(mainvbox)
-        okbutton.connect("clicked",self.on_okbutton_clicked,maincombo)
-        self.connect("delete-event", self.on_kill)
-        self.connect("destroy", self.on_kill)
+        #self.add(mainvbox)
+        #okbutton.connect("clicked",self.on_okbutton_clicked,maincombo)
+        #self.connect("delete-event", self.on_kill)
+        #self.connect("destroy", self.on_kill)
 
-    def on_okbutton_clicked(self,button,combo):
-        text = combo.get_active_text()
+    def on_ok_button_clicked(self,button,combo):
+        
+        text = button.GetStringSelection()
         for backend in backends:
             if backend.name == text:
                 break
         else:
             raise Exception
-        self.backend = backend()
-        self.hide()
+        #Eww
+        globals()["backend"] = backend()
+        self.Show(False)
         try:
-            self.backend.create_new()
-            self.destroy()
-            gtk.main_quit()
+            globals()["backend"].create_new()
+            self.DestroyChildren()
+            self.Destroy()
+
+
+
+            #gtk.main_quit()
         except Exception as e:
             print e
-            self.show()
+            self.Show(True)
 
-    def run(self):
-        gtk.main()
-        return self.backend
+    def on_cancel_button_clicked(self,button):
+        self.Destroy()
+
+    def run(self,app):
+        app.MainLoop()
+        return globals()["backend"]
 
     def on_kill(self,*args):
         gtk.main_quit()
@@ -310,24 +385,69 @@ def make_icon_popup(icon, button, time, paused):
     menu.show_all()
 
     menu.popup(None, None, gtk.status_icon_position_menu, button, time, icon) # previous working pygtk line
+
+paused = False
+
+def create_menu_item(menu, label, func):
+    item = wx.MenuItem(menu, -1, label)
+    menu.Bind(wx.EVT_MENU, func, id=item.GetId())
+    menu.AppendItem(item)
+    return item
+
+class TaskBarIcon(wx.TaskBarIcon):
+    def __init__(self):
+        super(TaskBarIcon, self).__init__()
+        self.set_icon("icon.png")
+        self.Bind(wx.EVT_TASKBAR_LEFT_DOWN, self.on_left_down)
+
+    def CreatePopupMenu(self):
+        global paused
+        menu = wx.Menu()
+        if paused:
+            label = "Resume Clippacloud"
+        else:
+            label = "Pause Clippacloud"
+        create_menu_item(menu, label, self.on_pause)
+        menu.AppendSeparator()
+        create_menu_item(menu, 'Exit Clippacloud', self.on_exit)
+        return menu
+
+    def set_icon(self, path):
+        icon = wx.IconFromBitmap(wx.Bitmap(path))
+        self.SetIcon(icon, "Clippacloud")
+
+    def on_left_down(self, event):
+        print 'Tray icon was left-clicked.'
+
+    def on_pause(self, event):
+        global paused
+        paused = not paused
         
 
+
+    def on_exit(self, event):
+        wx.CallAfter(self.Destroy)
+
 def main():
-    icon = gtk.status_icon_new_from_stock(gtk.STOCK_EDIT)
-    icon.set_title("ClippaCloud")
-    icon.set_visible(True)
-    paused = [False]
-    icon.connect("popup-menu",make_icon_popup, paused)
+    # icon = gtk.status_icon_new_from_stock(gtk.STOCK_EDIT)
+    # icon.set_title("ClippaCloud")
+    # icon.set_visible(True)
+    # paused = [False]
+    # icon.connect("popup-menu",make_icon_popup, paused)
     parser = argparse.ArgumentParser(description='Tiling window manager.')
     parser.add_argument('-c, --config', dest="config", type=str, nargs='?',
                        help='config file for manager')
     args = parser.parse_args()
     clippacloud.init(args)
+    app = wx.PySimpleApp()
     settings = Settings.from_xml(settingstext)
     if not settings.backend:
         initwindow = InitBackendWindow(settings, backends)
-        initwindow.show_all()
-        backend = initwindow.run()
+        initwindow.Show(True)
+        app.SetTopWindow(initwindow)
+        #backend = initwindow.run(app)
+        app.MainLoop()
+        backend = globals()["backend"]
         settings.backend = backend.name
         settings.connectiondata = backend.get_connection_data()
         #initwindow.connect("delete-event", on_kill)
@@ -349,9 +469,10 @@ def main():
     modified = datetime.datetime.min
     def idle_func():
         global modified
+        global paused
         try:
-            if not paused[0]:
-                cp = gtk.clipboard_get()
+            if not paused:
+                cp = wx.Clipboard.Get()
                 clipcatcher.try_catch_clip(cp,backend)
                 files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
                 if files:
@@ -359,7 +480,7 @@ def main():
                     if filedesc.modified > modified:
                         clippacloud.actions.set_clipboard_from_cloud(cp)
                         modified = filedesc.modified
-                    cp.store()
+                    cp.Flush()
                     totalsize = sum(x.size for x in files)
                     while totalsize > config.max_size:
                         clippacloud.backend.remove_file(files[0].path)
@@ -367,12 +488,15 @@ def main():
                         totalsize = sum(x.size for x in files)
         except Exception as e:
             print e
-        return True
-    gobject.timeout_add(1000,idle_func)
-    try:
-        gtk.main()
-    except:
-        pass
+        wx.CallLater(1000,idle_func)
+    icon = TaskBarIcon()
+    wx.CallLater(1000,idle_func)
+    app.MainLoop()
+    #gobject.timeout_add(1000,idle_func)
+    # try:
+    #     gtk.main()
+    # except:
+    #     pass
     with open(settingsfilepath,"w") as outfile:
         outfile.write(ET.tostring(settings.to_xml()))
 
