@@ -2,7 +2,8 @@ from clippacloud import exceptions
 from clippacloud import sendevent
 from clippacloud import keycodes
 import clippacloud
-import gtk
+#import gtk
+import wx
 import tempfile
 import os
 
@@ -23,11 +24,15 @@ def set_clipboard_from_cloud(cp):
     path = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified, reverse=True)[0].path
     data = clippacloud.backend.get_file_data(path)
     if path.endswith(".txt"):
-        cp.set_text(data)
+        data = wx.TextDataObject(data)
+        cp.AddData(data)
     elif path.endswith("png"):
         tmpfile, tmppath = tempfile.mkstemp()
         with os.fdopen(tmpfile,"wb") as outfile:
             outfile.write(data)
+        with open(tempfile,"rb") as infile:
+            image = wx.Image.LoadFile(infile,wx.BITMAP_TYPE_PNG)
+        data = wx.BitmapDataObject(image.ConvertToBitmap())
         cp.set_image(gtk.gdk.pixbuf_new_from_file(tmppath))
         os.remove(tmppath)
     
