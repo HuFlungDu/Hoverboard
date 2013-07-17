@@ -15,11 +15,12 @@ import time
 import base64
 import functools
 
-
 import clippacloud
 from clippacloud import exceptions
 from clippacloud import clipcatcher
 from clippacloud import config
+
+import icon
 
 backend = None
 
@@ -397,7 +398,7 @@ def create_menu_item(menu, label, func):
 class TaskBarIcon(wx.TaskBarIcon):
     def __init__(self):
         super(TaskBarIcon, self).__init__()
-        self.set_icon("icon.png")
+        self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
         self.Bind(wx.EVT_TASKBAR_LEFT_DOWN, self.on_left_down)
 
     def CreatePopupMenu(self):
