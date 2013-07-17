@@ -441,7 +441,7 @@ def main():
     clippacloud.init(args)
     app = wx.PySimpleApp()
     settings = Settings.from_xml(settingstext)
-    if True or not settings.backend:
+    if not settings.backend:
         initwindow = InitBackendWindow(settings, backends)
         initwindow.Show(True)
         app.SetTopWindow(initwindow)
