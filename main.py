@@ -1,6 +1,6 @@
 #from gi.repository import Gtk, Gdk, GObject
-import gtk
-import gobject
+#import gtk
+#import gobject
 import wx
 import dropbox
 from dropbox import client, rest, session
@@ -275,7 +275,7 @@ class InitBackendWindow(wx.Frame):
         backend_combo.SetStringSelection(backends[0].name)
 
         ok_button = wx.Button(panel, wx.ID_OK)
-        ok_button.Bind(wx.EVT_BUTTON,functools.partial(self.on_ok_button_clicked,backend_combo))
+        ok_button.Bind(wx.EVT_BUTTON,functools.partial(self.on_ok_button_clicked,combo=backend_combo))
         cancel_button = wx.Button(panel, wx.ID_CANCEL)
         cancel_button.Bind(wx.EVT_BUTTON,self.on_cancel_button_clicked)
 
@@ -326,7 +326,7 @@ class InitBackendWindow(wx.Frame):
 
     def on_ok_button_clicked(self,button,combo):
         
-        text = button.GetStringSelection()
+        text = combo.GetStringSelection()
         for backend in backends:
             if backend.name == text:
                 break
@@ -441,7 +441,7 @@ def main():
     clippacloud.init(args)
     app = wx.PySimpleApp()
     settings = Settings.from_xml(settingstext)
-    if not settings.backend:
+    if True or not settings.backend:
         initwindow = InitBackendWindow(settings, backends)
         initwindow.Show(True)
         app.SetTopWindow(initwindow)
