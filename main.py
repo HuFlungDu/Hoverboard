@@ -25,8 +25,6 @@ import icon
 
 backend = None
 
-
-
 class Settings(object):
     def __init__(self, backend, connectiondata):
         self._backend = backend
@@ -95,7 +93,6 @@ settingsdirectory = os.path.join(homedir,projectname)
 if not os.path.isdir(settingsdirectory):
     os.mkdir(settingsdirectory)
 settingsfilepath = os.path.join(settingsdirectory,"settings.xml")
-lockfilepath = os.path.join(settingsdirectory,".lock")
 #Create the settings file, so the read below will work during first run
 if not os.path.isfile(settingsfilepath):
     open(settingsfilepath,'w').close()
