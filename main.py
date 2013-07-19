@@ -19,20 +19,11 @@ import clippacloud
 from clippacloud import exceptions
 from clippacloud import clipcatcher
 from clippacloud import config
+from clippacloud import plugin
 
 import icon
 
 backend = None
-
-class FileDescription(object):
-    def __init__(self,path,modified,size):
-        self.path = path
-        self.modified = modified
-        self.size = size
-        pass
-
-class Backend(object):
-    pass
 
     #def connect(self):
     #    raise NotImplementedError
@@ -58,123 +49,123 @@ class MainApp(wx.App):
         wx.EventLoop.SetActive(old)
         self.keepGoing = True
 
-class DropboxUrlWindow(wx.Dialog):
-    def __init__(self,url,session, token):
-        wx.Dialog.__init__(self,None,-1,"Authorize the app")
-        panel = wx.Panel(self, -1)
-        link = wx.HyperlinkCtrl(panel,-1,"Follow this link to activate the app",url)
-        mainvbox = wx.BoxSizer(wx.VERTICAL)
-        mainvbox.Add(link)
-        ok_button = wx.Button(panel, wx.ID_OK)
-        cancel_button = wx.Button(panel, wx.ID_CANCEL)
-        button_sizer = wx.StdDialogButtonSizer()
-        button_sizer.AddButton(ok_button)
-        button_sizer.AddButton(cancel_button)
-        button_sizer.Realize()
-        if button_sizer:
-            mainvbox.Add(button_sizer,wx.ALIGN_RIGHT)
+# class DropboxUrlWindow(wx.Dialog):
+#     def __init__(self,url,session, token):
+#         wx.Dialog.__init__(self,None,-1,"Authorize the app")
+#         panel = wx.Panel(self, -1)
+#         link = wx.HyperlinkCtrl(panel,-1,"Follow this link to activate the app",url)
+#         mainvbox = wx.BoxSizer(wx.VERTICAL)
+#         mainvbox.Add(link)
+#         ok_button = wx.Button(panel, wx.ID_OK)
+#         cancel_button = wx.Button(panel, wx.ID_CANCEL)
+#         button_sizer = wx.StdDialogButtonSizer()
+#         button_sizer.AddButton(ok_button)
+#         button_sizer.AddButton(cancel_button)
+#         button_sizer.Realize()
+#         if button_sizer:
+#             mainvbox.Add(button_sizer,wx.ALIGN_RIGHT)
 
-        border = wx.BoxSizer()
-        border.Add(mainvbox, 0, wx.ALL, 15)
-        panel.SetSizerAndFit(border)
-        self.Fit()
-
-
-class DropboxBackend(Backend):
-    name = "Dropbox"
-    _APP_SECRET_ENCODE = "dHEyZnJjcHoydGczeHl5|NWszZ3d1NzdxbndxMXdl"
-    # Herp derp, they'll never figure it out
-    _APP_KEY = base64.b64decode(_APP_SECRET_ENCODE.split("|")[0])
-    _APP_SECRET = base64.b64decode(_APP_SECRET_ENCODE.split("|")[1])
-
-    _ACCESS_TYPE = 'app_folder'
-
-    def __init__(self):        
-        self.client = None
-        self.access_token = None
-
-    def resume(self, init_data):
-        key = init_data.get("key")
-        secret = init_data.get("secret")
-        sess = session.DropboxSession(self._APP_KEY,self._APP_SECRET, self._ACCESS_TYPE )
-        sess.set_token(key,secret)
-        self.client = client.DropboxClient(sess)
+#         border = wx.BoxSizer()
+#         border.Add(mainvbox, 0, wx.ALL, 15)
+#         panel.SetSizerAndFit(border)
+#         self.Fit()
 
 
-    def create_new(self):
-        sess = session.DropboxSession(self._APP_KEY, self._APP_SECRET, self._ACCESS_TYPE)
+# class DropboxBackend(object):
+#     name = "Dropbox"
+#     _APP_SECRET_ENCODE = "dHEyZnJjcHoydGczeHl5|NWszZ3d1NzdxbndxMXdl"
+#     # Herp derp, they'll never figure it out
+#     _APP_KEY = base64.b64decode(_APP_SECRET_ENCODE.split("|")[0])
+#     _APP_SECRET = base64.b64decode(_APP_SECRET_ENCODE.split("|")[1])
 
-        request_token = sess.obtain_request_token()
-        url = sess.build_authorize_url(request_token)
+#     _ACCESS_TYPE = 'app_folder'
 
-        urlwindow = DropboxUrlWindow(url,sess,request_token)
-        #urlwindow.set_transient_for(self)
-        response = urlwindow.ShowModal()
-        urlwindow.Destroy()
-        #response = urlwindow.run()
-        self.access_token = None
-        if response == wx.ID_OK:
-            self.access_token = sess.obtain_access_token(request_token)
-            self.client = client.DropboxClient(sess)
+#     def __init__(self):        
+#         self.client = None
+#         self.access_token = None
 
-        #urlwindow.destroy()
-
-        if not self.access_token:
-            raise exceptions.FailedToCreateBackend
-
-        # webbrowser.open_new_tab(url)
-        # self.access_token = sess.obtain_access_token(request_token)
-
-    def save_file(self,filepath,outpath=None):
-        if outpath is None:
-            outpath = os.path.basename(filepath)
-        with open(filepath,"rb") as f:
-            self.client.put_file(outpath,f)
-
-    def save_data(self,data,outpath):
-        #tmpfile, tmppath = tempfile.mkstemp()
-        #with os.fdopen(tmpfile,"wb") as outfile:
-        #    outfile.write(data)
-        #with open(tmppath,"rb") as f:
-        self.client.put_file(outpath,data)
-        #os.remove(tmppath)
-
-    def remove_file(self,filename):
-        self.client.file_delete(filename)
-
-    def get_file(self,filename,path):
-        hfile = self.client.get_file(filename)
-        data = hfile.read()
-        os.path.join(path,filename).write(data)
-
-    def get_file_data(self,filename):
-        hfile = self.client.get_file(filename)
-        data = hfile.read()
-        return data
-
-    def list_files(self):
-        files = []
-        metadata = self.client.metadata("/")
-        contents = metadata["contents"]
-        for filedata in contents:
-            if not filedata["is_dir"]:
-                files.append(FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"]))
-        return files
-
-    def get_connection_data(self):
-        data = ET.Element("ConnectionData",{"key":self.access_token.key,"secret":self.access_token.secret})
-        return data
-
-    def get_latest_file(self,path):
-        filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
-        return self.get_file(filename,path)
-
-    def get_latest_file_data(self):
-        filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
-        return self.get_file_data(filename)        
+#     def resume(self, init_data):
+#         key = init_data.get("key")
+#         secret = init_data.get("secret")
+#         sess = session.DropboxSession(self._APP_KEY,self._APP_SECRET, self._ACCESS_TYPE )
+#         sess.set_token(key,secret)
+#         self.client = client.DropboxClient(sess)
 
 
-backends = [DropboxBackend]
+#     def create_new(self):
+#         sess = session.DropboxSession(self._APP_KEY, self._APP_SECRET, self._ACCESS_TYPE)
+
+#         request_token = sess.obtain_request_token()
+#         url = sess.build_authorize_url(request_token)
+
+#         urlwindow = DropboxUrlWindow(url,sess,request_token)
+#         #urlwindow.set_transient_for(self)
+#         response = urlwindow.ShowModal()
+#         urlwindow.Destroy()
+#         #response = urlwindow.run()
+#         self.access_token = None
+#         if response == wx.ID_OK:
+#             self.access_token = sess.obtain_access_token(request_token)
+#             self.client = client.DropboxClient(sess)
+
+#         #urlwindow.destroy()
+
+#         if not self.access_token:
+#             raise exceptions.FailedToCreateBackend
+
+#         # webbrowser.open_new_tab(url)
+#         # self.access_token = sess.obtain_access_token(request_token)
+
+#     def save_file(self,filepath,outpath=None):
+#         if outpath is None:
+#             outpath = os.path.basename(filepath)
+#         with open(filepath,"rb") as f:
+#             self.client.put_file(outpath,f)
+
+#     def save_data(self,data,outpath):
+#         #tmpfile, tmppath = tempfile.mkstemp()
+#         #with os.fdopen(tmpfile,"wb") as outfile:
+#         #    outfile.write(data)
+#         #with open(tmppath,"rb") as f:
+#         self.client.put_file(outpath,data)
+#         #os.remove(tmppath)
+
+#     def remove_file(self,filename):
+#         self.client.file_delete(filename)
+
+#     def get_file(self,filename,path):
+#         hfile = self.client.get_file(filename)
+#         data = hfile.read()
+#         os.path.join(path,filename).write(data)
+
+#     def get_file_data(self,filename):
+#         hfile = self.client.get_file(filename)
+#         data = hfile.read()
+#         return data
+
+#     def list_files(self):
+#         files = []
+#         metadata = self.client.metadata("/")
+#         contents = metadata["contents"]
+#         for filedata in contents:
+#             if not filedata["is_dir"]:
+#                 files.append(FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"]))
+#         return files
+
+#     def get_connection_data(self):
+#         data = ET.Element("ConnectionData",{"key":self.access_token.key,"secret":self.access_token.secret})
+#         return data
+
+#     def get_latest_file(self,path):
+#         filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
+#         return self.get_file(filename,path)
+
+#     def get_latest_file_data(self):
+#         filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
+#         return self.get_file_data(filename)        
+
+
+#backends = [DropboxBackend]
 
 
 class Settings(object):
@@ -271,12 +262,12 @@ class InitBackendWindow(wx.Frame):
         panel = wx.Panel(self, -1)
 
         backendlabel = wx.StaticText(panel, -1, "Choose backend:")
-        backend_combo = wx.Choice(panel, -1, choices=[backend.name for backend in backends])
+        backend_combo = wx.Choice(panel, -1, choices=backends.keys())
 
-        backend_combo.SetStringSelection(backends[0].name)
+        backend_combo.SetStringSelection(iter(backends).next())
 
         ok_button = wx.Button(panel, wx.ID_OK)
-        ok_button.Bind(wx.EVT_BUTTON,functools.partial(self.on_ok_button_clicked,combo=backend_combo))
+        ok_button.Bind(wx.EVT_BUTTON,functools.partial(self.on_ok_button_clicked,combo=backend_combo,backends=backends))
         cancel_button = wx.Button(panel, wx.ID_CANCEL)
         cancel_button.Bind(wx.EVT_BUTTON,self.on_cancel_button_clicked)
 
@@ -298,52 +289,19 @@ class InitBackendWindow(wx.Frame):
         panel.SetSizerAndFit(border)
         self.Fit()
 
-        #mainvbox = gtk.VBox()
+    def on_ok_button_clicked(self,button,combo,backends):
+        try:
+            text = combo.GetStringSelection()
+            #Eww
+            globals()["backend"] = backends[(backend for backend in backends if backend == text).next()]()
+            self.Show(False)
+        except StopIteration:
+            raise ValueError("Backend not found")
 
-        #self.maingrid = gtk.Grid()
-        #backendhbox = gtk.HBox()
-        #backendlabel = gtk.Label("Choose backend:")
-        #maincombo = gtk.combo_box_new_text()
-        #for backend in backends:
-        #    maincombo.append_text(backend.name)
-        #maincombo.set_active(0)
-        #backendhbox.pack_start(backendlabel,False,True,0)
-        #backendhbox.pack_start(maincombo,True,True,0)
-        #buttonhbox = gtk.HBox()
-        #okbutton = gtk.Button(stock = gtk.STOCK_OK)
-        #cancelbutton = gtk.Button(stock = gtk.STOCK_CANCEL)
-        #buttonhbox.pack_start(cancelbutton,True,False,0)
-        #buttonhbox.pack_start(okbutton,False,False,0)
-        #mainvbox.pack_start(backendhbox,False,False,0)
-        #mainvbox.pack_start(buttonhbox,False,False,0)
-        #self.maingrid.attach(backendlabel,0,0,1,1)
-        #self.maingrid.attach(maincombo,1,0,2,1)
-        #self.maingrid.attach(okbutton,2,1,1,1)
-        #self.maingrid.attach(cancelbutton,1,1,1,1)
-        #self.add(mainvbox)
-        #okbutton.connect("clicked",self.on_okbutton_clicked,maincombo)
-        #self.connect("delete-event", self.on_kill)
-        #self.connect("destroy", self.on_kill)
-
-    def on_ok_button_clicked(self,button,combo):
-        
-        text = combo.GetStringSelection()
-        for backend in backends:
-            if backend.name == text:
-                break
-        else:
-            raise Exception
-        #Eww
-        globals()["backend"] = backend()
-        self.Show(False)
         try:
             globals()["backend"].create_new()
             self.DestroyChildren()
             self.Destroy()
-
-
-
-            #gtk.main_quit()
         except Exception as e:
             print e
             self.Show(True)
@@ -361,31 +319,6 @@ class InitBackendWindow(wx.Frame):
 
 def on_kill(window, *args):
     gtk.main_quit()
-
-def make_icon_popup(icon, button, time, paused):
-    menu = gtk.Menu()
-    quit = gtk.MenuItem()
-    pause = gtk.MenuItem()
-    if paused[0]:
-        pause.set_label("Resume clippacloud")
-    else:
-        pause.set_label("Pause clippacloud")
-
-    def pause_unpause_cloud(item,paused):
-        paused[0] = not paused[0]
-
-    pause.connect("activate",pause_unpause_cloud, paused)
-
-    quit.set_label("Exit clippacloud")
-
-    quit.connect("activate", gtk.main_quit)
-
-    menu.append(pause)
-    menu.append(quit)
-
-    menu.show_all()
-
-    menu.popup(None, None, gtk.status_icon_position_menu, button, time, icon) # previous working pygtk line
 
 paused = False
 
@@ -430,11 +363,6 @@ class TaskBarIcon(wx.TaskBarIcon):
         wx.CallAfter(self.Destroy)
 
 def main():
-    # icon = gtk.status_icon_new_from_stock(gtk.STOCK_EDIT)
-    # icon.set_title("ClippaCloud")
-    # icon.set_visible(True)
-    # paused = [False]
-    # icon.connect("popup-menu",make_icon_popup, paused)
     parser = argparse.ArgumentParser(description='Tiling window manager.')
     parser.add_argument('-c, --config', dest="config", type=str, nargs='?',
                        help='config file for manager')
@@ -442,29 +370,24 @@ def main():
     clippacloud.init(args)
     app = wx.PySimpleApp()
     settings = Settings.from_xml(settingstext)
-    if not settings.backend:
-        initwindow = InitBackendWindow(settings, backends)
-        initwindow.Show(True)
-        app.SetTopWindow(initwindow)
-        #backend = initwindow.run(app)
-        app.MainLoop()
-        backend = globals()["backend"]
-        settings.backend = backend.name
-        settings.connectiondata = backend.get_connection_data()
-        #initwindow.connect("delete-event", on_kill)
-        #initwindow.connect("destroy", on_kill)
-    else:
-        try:
-            backend = filter(lambda x: x.name == settings.backend,backends)[0]()
-            backend.resume(settings.connectiondata)
-        except:
-            initwindow = InitBackendWindow(settings, backends)
-            initwindow.show_all()
-            backend = initwindow.run()
+    while True:
+        if not settings.backend:
+            initwindow = InitBackendWindow(settings, clippacloud.backends)
+            initwindow.Show(True)
+            app.SetTopWindow(initwindow)
+            app.MainLoop()
+            backend = globals()["backend"]
             settings.backend = backend.name
-            settings.connectiondata = backend.get_connection_data()
-            #initwindow.connect("delete-event", on_kill)
-            #initwindow.connect("destroy", on_kill)
+            settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
+            break
+        else:
+            try:
+                backend = clippacloud.backends[settings.backend]()
+                backend.resume(settings.connectiondata)
+                break
+            except Exception as e:
+                settings.backend = None
+
     clippacloud.backend = backend
     global modified
     modified = datetime.datetime.min
@@ -493,11 +416,6 @@ def main():
     icon = TaskBarIcon()
     wx.CallLater(1000,idle_func)
     app.MainLoop()
-    #gobject.timeout_add(1000,idle_func)
-    # try:
-    #     gtk.main()
-    # except:
-    #     pass
     with open(settingsfilepath,"w") as outfile:
         outfile.write(ET.tostring(settings.to_xml()))
 
