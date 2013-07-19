@@ -25,29 +25,7 @@ import icon
 
 backend = None
 
-    #def connect(self):
-    #    raise NotImplementedError
 
-class MainApp(wx.App):
-    def OnInit(self):
-        self.keepGoing = True
-        return True
-
-    def main_quit(self):
-        self.keepGoing = False
-
-    def MainLoop(self):
-        evtloop = wx.EventLoop()
-        old = wx.EventLoop.GetActive()
-        wx.EventLoop.SetActive(evtloop)
-        while self.keepGoing:
-            while evtloop.Pending():
-                evtloop.Dispatch()
-            time.sleep(0.10)
-            #evtloop.ProcessIdle()
-
-        wx.EventLoop.SetActive(old)
-        self.keepGoing = True
 
 class Settings(object):
     def __init__(self, backend, connectiondata):
