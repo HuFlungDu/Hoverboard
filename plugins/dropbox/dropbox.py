@@ -46,7 +46,6 @@ class Backend(object):
                                           "text":"Follow this link to activate the app"}]}
 
         urlwindow = plugin.make_dialog(window_definition)
-        #urlwindow.set_transient_for(self)
         response = urlwindow.run()
         urlwindow.destroy()
         self.access_token = None
@@ -54,13 +53,9 @@ class Backend(object):
             self.access_token = sess.obtain_access_token(request_token)
             self.client = client.DropboxClient(sess)
 
-        #urlwindow.destroy()
-
         if not self.access_token:
             raise exceptions.FailedToCreateBackend
 
-        # webbrowser.open_new_tab(url)
-        # self.access_token = sess.obtain_access_token(request_token)
 
     def save_file(self,filepath,outpath=None):
         if outpath is None:
@@ -69,12 +64,7 @@ class Backend(object):
             self.client.put_file(outpath,f)
 
     def save_data(self,data,outpath):
-        #tmpfile, tmppath = tempfile.mkstemp()
-        #with os.fdopen(tmpfile,"wb") as outfile:
-        #    outfile.write(data)
-        #with open(tmppath,"rb") as f:
         self.client.put_file(outpath,data)
-        #os.remove(tmppath)
 
     def remove_file(self,filename):
         self.client.file_delete(filename)
@@ -90,11 +80,6 @@ class Backend(object):
         return data
 
     def list_files(self):
-        # metadata = self.client.metadata("/")
-        # contents = metadata["contents"]
-        # for filedata in contents:
-        #     if not filedata["is_dir"]:
-        #         files.append(plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"]))
         has_more = True
         while has_more:
             delta = self.client.delta(self.delta)
