@@ -73,7 +73,7 @@ def get_clip_content(clipboard):
 
 def catch_clip(clipboard,backend):
     content = waitfor_clip_content(clipboard)
-    now = datetime.datetime.now()
+    now = datetime.datetime.utcnow()
     #path = os.path.join(savepath,str(now))
     filename = str(now)
     if isinstance(content,gtk.gdk.Pixbuf):
@@ -96,7 +96,7 @@ def catch_clip(clipboard,backend):
 
 def try_catch_clip(clipboard,backend):
     content = get_clip_content(clipboard)
-    now = datetime.datetime.now()
+    now = datetime.datetime.utcnow()
     #path = os.path.join(savepath,str(now))
     filename = str(now)
     if isinstance(content,wx.Image):

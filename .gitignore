@@ -3,3 +3,5 @@
 *.sublime-workspace
 *.py[co]
 .DS_Store
+dist/*
+new/*
