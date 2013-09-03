@@ -222,7 +222,7 @@ class TaskBarIcon(wx.TaskBarIcon):
         self.top_window.Destroy()
 
 def main():
-    parser = argparse.ArgumentParser(description='Tiling window manager.')
+    parser = argparse.ArgumentParser(description='Cloud based clipboard syncing.')
     parser.add_argument('-c, --config', dest="config", type=str, nargs='?',
                        help='config file for manager')
     args = parser.parse_args()
