@@ -3,6 +3,7 @@ import os
 import imp
 import functools
 import collections
+import logging
 
 #Only one control so far because this is the only one I need. Kind of defeats the purpose of a plugin system, but there you go.
 LINK_CONTROL,TEXTINPUT_CONTROL = xrange(2)
@@ -115,14 +116,15 @@ def get_plugins(directory="plugins"):
     plugins = {}
     for filename in filelist:
         try:
-            impfile, imppath, impdescription = imp.find_module(filename.split(".")[0],[directory])
-            module = imp.load_module("{}_plugin".format(filename.split(".")[0]), 
-                                     impfile, imppath, impdescription)
-
-            if module.plugin_name not in plugins.setdefault(module.plugin_type, {}):
-                plugins[module.plugin_type][module.plugin_name] = module.Backend
+            if not filename.startswith("__"):
+                impfile, imppath, impdescription = imp.find_module(filename.split(".")[0],[directory])
+                module = imp.load_module("{}_plugin".format(filename.split(".")[0]), 
+                                         impfile, imppath, impdescription)
+                
+                if module.plugin_name not in plugins.setdefault(module.plugin_type, {}):
+                    plugins[module.plugin_type][module.plugin_name] = module.Backend
         except Exception as e:
-            print e
+            logging.warning(e)
         finally:
             try:
                 impfile.close()

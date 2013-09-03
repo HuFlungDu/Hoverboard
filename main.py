@@ -2,8 +2,6 @@
 #import gtk
 #import gobject
 import wx
-import dropbox
-from dropbox import client, rest, session
 import os
 import signal
 import xml.etree.ElementTree as ET
@@ -14,6 +12,11 @@ import datetime
 import time
 import base64
 import functools
+import sys
+
+import logging
+
+sys.path.append(os.path.dirname(__file__))
 
 import clippacloud
 from clippacloud import exceptions
@@ -22,6 +25,7 @@ from clippacloud import config
 from clippacloud import plugin
 
 import icon
+import traceback
 
 backend = None
 
@@ -91,7 +95,7 @@ else:
     homedir = os.path.join(os.path.expanduser("~"), ".config")
 settingsdirectory = os.path.join(homedir,projectname)
 if not os.path.isdir(settingsdirectory):
-    os.mkdir(settingsdirectory)
+    os.makedirs(settingsdirectory)
 settingsfilepath = os.path.join(settingsdirectory,"settings.xml")
 #Create the settings file, so the read below will work during first run
 if not os.path.isfile(settingsfilepath):
@@ -100,9 +104,15 @@ if not os.path.isfile(settingsfilepath):
 with open(settingsfilepath,'r') as settingsfile:
     settingstext = settingsfile.read()
 
+FORMAT = '%(asctime)-15s %(message)s'
+logfilepath = os.path.join(settingsdirectory,"clippacloud.log")
+logging.basicConfig(format=FORMAT,filename=logfilepath)
+logging.info("Started clippacloud")
+
 class InitBackendWindow(wx.Frame):
-    def __init__(self,settings, backends):
+    def __init__(self,settings, backends,app):
         wx.Frame.__init__(self,None,-1,"Initialize Backend")
+        self.app = app
         panel = wx.Panel(self, -1)
 
         backendlabel = wx.StaticText(panel, -1, "Choose backend:")
@@ -144,25 +154,19 @@ class InitBackendWindow(wx.Frame):
 
         try:
             globals()["backend"].create_new()
-            self.DestroyChildren()
-            self.Destroy()
+            #self.DestroyChildren()
+            wx.CallAfter(self.Destroy)
+            wx.CallAfter(self.app.Exit)
         except Exception as e:
-            print e
+            logger.error(traceback.format_exc())
             self.Show(True)
 
     def on_cancel_button_clicked(self,button):
-        self.Destroy()
+        wx.CallAfter(self.Destroy())
 
     def run(self,app):
         app.MainLoop()
         return globals()["backend"]
-
-    def on_kill(self,*args):
-        gtk.main_quit()
-        pass
-
-def on_kill(window, *args):
-    gtk.main_quit()
 
 paused = False
 
@@ -173,10 +177,22 @@ def create_menu_item(menu, label, func):
     return item
 
 class TaskBarIcon(wx.TaskBarIcon):
-    def __init__(self):
-        super(TaskBarIcon, self).__init__()
-        self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
-        self.Bind(wx.EVT_TASKBAR_LEFT_DOWN, self.on_left_down)
+    def __init__(self, top_window):
+        # If we are using the development branch on Mac OSX, we can make it a menu bar item
+        self.top_window = top_window
+        # Cache
+        icon.getTrayIconPausedIcon()
+        if sys.platform == "darwin":
+            try:
+                super(TaskBarIcon, self).__init__(wx.TBI_CUSTOM_STATUSITEM)
+                self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
+            except (AttributeError,wx._core.PyAssertionError):
+                super(TaskBarIcon, self).__init__(wx.TBI_DOCK)
+                self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
+        else:
+            super(TaskBarIcon, self).__init__()
+            self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
+
 
     def CreatePopupMenu(self):
         global paused
@@ -194,17 +210,19 @@ class TaskBarIcon(wx.TaskBarIcon):
         icon = wx.IconFromBitmap(wx.Bitmap(path))
         self.SetIcon(icon, "Clippacloud")
 
-    def on_left_down(self, event):
-        print 'Tray icon was left-clicked.'
-
     def on_pause(self, event):
         global paused
         paused = not paused
+        if paused:
+            self.SetIcon(icon.getTrayIconPausedIcon(),"Clippacloud")
+        else:
+            self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
         
 
 
     def on_exit(self, event):
         wx.CallAfter(self.Destroy)
+        self.top_window.Destroy()
 
 def main():
     parser = argparse.ArgumentParser(description='Tiling window manager.')
@@ -212,11 +230,16 @@ def main():
                        help='config file for manager')
     args = parser.parse_args()
     clippacloud.init(args)
-    app = wx.PySimpleApp()
+    app = wx.App()
+    app.SetTopWindow(None)
+    # wx is a dummy dummy
+    frame = wx.Frame(None)
+    app.SetTopWindow(frame)
+    icon = TaskBarIcon(frame)
     settings = Settings.from_xml(settingstext)
     while True:
         if not settings.backend:
-            initwindow = InitBackendWindow(settings, clippacloud.backends)
+            initwindow = InitBackendWindow(settings, clippacloud.backends, app)
             initwindow.Show(True)
             app.SetTopWindow(initwindow)
             app.MainLoop()
@@ -231,7 +254,6 @@ def main():
                 break
             except Exception as e:
                 settings.backend = None
-
     clippacloud.backend = backend
     global modified
     modified = datetime.datetime.min
@@ -251,13 +273,16 @@ def main():
                     cp.Flush()
                     totalsize = sum(x.size for x in files)
                     while totalsize > config.max_size:
-                        clippacloud.backend.remove_file(files[0].path)
+                        try:
+                            clippacloud.backend.remove_file(files[0].path)
+                        except:
+                            pass
                         files = files[1:]
                         totalsize = sum(x.size for x in files)
         except Exception as e:
-            print e
+            logging.error(traceback.format_exc())
         wx.CallLater(1000,idle_func)
-    icon = TaskBarIcon()
+    
     wx.CallLater(1000,idle_func)
     app.MainLoop()
     with open(settingsfilepath,"w") as outfile:
@@ -265,4 +290,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        logging.error(traceback.format_exc())
+    logging.info("Closing clippacloud")
+    logging.shutdown()

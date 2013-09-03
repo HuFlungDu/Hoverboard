@@ -1,12 +1,15 @@
-import dropbox
-from dropbox import client, rest, session
 from clippacloud import plugin
 import base64
 import time
 import datetime
+import sys
+import os
 
-plugin_name = "Dropbox"
-plugin_type = plugin.BACKEND_PLUGIN
+old_path = sys.path
+sys.path = sys.path+[os.path.dirname(__file__)]
+import dropboxlib
+from dropboxlib import client, rest, session
+sys.path = old_path
 
 class Backend(object):
     name = "Dropbox"
@@ -20,6 +23,8 @@ class Backend(object):
     def __init__(self):
         self.client = None
         self.access_token = None
+        self.delta = None
+        self.files = {}
 
     def resume(self, init_data):
         key = init_data.get("key")
@@ -85,13 +90,24 @@ class Backend(object):
         return data
 
     def list_files(self):
-        files = []
-        metadata = self.client.metadata("/")
-        contents = metadata["contents"]
-        for filedata in contents:
-            if not filedata["is_dir"]:
-                files.append(plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"]))
-        return files
+        # metadata = self.client.metadata("/")
+        # contents = metadata["contents"]
+        # for filedata in contents:
+        #     if not filedata["is_dir"]:
+        #         files.append(plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"]))
+        has_more = True
+        while has_more:
+            delta = self.client.delta(self.delta)
+            entries, reset, self.delta, has_more = delta["entries"], delta["reset"], delta["cursor"], delta["has_more"]
+            for path,filedata in entries:
+                if filedata is None:
+                    try:
+                        del(self.files[path])
+                    except:
+                        pass
+                else:
+                    self.files[path] = plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"])
+        return self.files.values()
 
     def get_connection_data(self):
         data = {"key":self.access_token.key,"secret":self.access_token.secret}

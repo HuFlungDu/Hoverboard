@@ -6,9 +6,12 @@ import time
 import datetime
 import os
 import tempfile
-from clippacloud import config
+#from clippacloud import config
+import clippacloud
+import struct
 
 content = None
+
 
 def waitfor_clip_content(clipboard):
     while True:
@@ -33,7 +36,9 @@ def get_clip_content(clipboard):
         bitmap_data = wx.BitmapDataObject()
         if clipboard.GetData(bitmap_data):
             image = bitmap_data.GetBitmap().ConvertToImage()
-            if isinstance(content,wx.Image) and content.GetData() != image.GetData():
+            # This is dumb, but for some reason the bitmap data is coming in differently even though it's all the same bitmap
+            # No idea. Comparing height and width for now.
+            if isinstance(content,wx.Image) and (content.GetWidth() != image.GetWidth()) and (content.GetHeight() != image.GetHeight()): #(content.GetData() != image.GetData()):
                 content = image
                 clipboard.Close()
                 return content
@@ -79,12 +84,12 @@ def catch_clip(clipboard,backend):
         with open(tmppath,"rb") as pngfile:
             data = pngfile.read()
         os.remove(tmppath)
-        if len(data) < config.max_size:
+        if len(data) < clippacloud.config.max_size:
             backend.save_data(data,filename)
         
-    elif isinstance(content,str):
+    elif isinstance(content,(str,unicode)):
         filename += ".txt"
-        if len(content) < config.max_size:
+        if len(content) < clippacloud.config.max_size:
             backend.save_data(content,filename)
         #with open(path,'w') as clipfile:
         #    clipfile.write(content)
@@ -95,20 +100,23 @@ def try_catch_clip(clipboard,backend):
     #path = os.path.join(savepath,str(now))
     filename = str(now)
     if isinstance(content,wx.Image):
-        filename += ".png"
-        tmpfile, tmppath = tempfile.mkstemp()
-        os.fdopen(tmpfile,"wb").close()
-        content.SaveFile(tmppath,wx.BITMAP_TYPE_PNG)
-        with open(tmppath,"rb") as pngfile:
-            data = pngfile.read()
-        os.remove(tmppath)
-        if len(data) < config.max_size:
+        filename += ".bmp"
+        data = struct.pack(">L",content.GetWidth()) + struct.pack(">L",content.GetHeight()) + content.GetData()
+        if content.HasAlpha():
+            data += content.GetAlphaData()
+        # tmpfile, tmppath = tempfile.mkstemp()
+        # os.fdopen(tmpfile,"wb").close()
+        # content.SaveFile(tmppath,wx.BITMAP_TYPE_PNG)
+        # with open(tmppath,"rb") as pngfile:
+        #     data = pngfile.read()
+        # os.remove(tmppath)
+        if len(data) < clippacloud.config.max_size:
             backend.save_data(data,filename)
         return True
         
     elif isinstance(content,(str,unicode)):
         filename += ".txt"
-        if len(content) < config.max_size:
+        if len(content) < clippacloud.config.max_size:
             backend.save_data(content,filename)
         return True
         #with open(path,'w') as clipfile:
