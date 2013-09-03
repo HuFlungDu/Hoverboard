@@ -1,6 +1,3 @@
-#from gi.repository import Gtk, Gdk, GObject
-#import gtk
-#import gobject
 import wx
 import os
 import signal

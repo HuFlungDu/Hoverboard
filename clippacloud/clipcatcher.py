@@ -1,12 +1,8 @@
-# import gtk
-# import pygtk
-#pygtk.require("2.0")
 import wx
 import time
 import datetime
 import os
 import tempfile
-#from clippacloud import config
 import clippacloud
 import struct
 
@@ -15,9 +11,6 @@ content = None
 
 def waitfor_clip_content(clipboard):
     while True:
-        #if clipboard.wait_is_uris_available:
-        #    print "here"
-        #    pass
         content = get_clip_content(clipboard)
         if content:
             return content
@@ -52,29 +45,11 @@ def get_clip_content(clipboard):
     else:
         clipboard.Close()
         return None
-        # if clipboard.wait_is_text_available():
-        #     newcontent = clipboard.wait_for_text()
-        #     if newcontent != content:
-        #         content = newcontent
-        #         return content
-        # elif clipboard.wait_is_image_available():
-        #     newcontent = clipboard.wait_for_image()
-        #     if (isinstance(content,gtk.gdk.Pixbuf) and 
-        #             #Weird bug where sometimes comparing two numpy arrays returns a bool value. No idea where that comes from
-        #             ((newcontent.get_pixels_array() != content.get_pixels_array()) is True 
-        #             or (newcontent.get_pixels_array() != content.get_pixels_array()).any())):
-        #         content = newcontent
-        #         return content
-        #     elif not isinstance(content,gtk.gdk.Pixbuf):
-        #         content = newcontent
-        #         return content
-        #     return None
 
 
 def catch_clip(clipboard,backend):
     content = waitfor_clip_content(clipboard)
     now = datetime.datetime.utcnow()
-    #path = os.path.join(savepath,str(now))
     filename = str(now)
     if isinstance(content,gtk.gdk.Pixbuf):
         filename += ".png"
@@ -91,25 +66,16 @@ def catch_clip(clipboard,backend):
         filename += ".txt"
         if len(content) < clippacloud.config.max_size:
             backend.save_data(content,filename)
-        #with open(path,'w') as clipfile:
-        #    clipfile.write(content)
 
 def try_catch_clip(clipboard,backend):
     content = get_clip_content(clipboard)
     now = datetime.datetime.utcnow()
-    #path = os.path.join(savepath,str(now))
     filename = str(now)
     if isinstance(content,wx.Image):
         filename += ".bmp"
         data = struct.pack(">L",content.GetWidth()) + struct.pack(">L",content.GetHeight()) + content.GetData()
         if content.HasAlpha():
             data += content.GetAlphaData()
-        # tmpfile, tmppath = tempfile.mkstemp()
-        # os.fdopen(tmpfile,"wb").close()
-        # content.SaveFile(tmppath,wx.BITMAP_TYPE_PNG)
-        # with open(tmppath,"rb") as pngfile:
-        #     data = pngfile.read()
-        # os.remove(tmppath)
         if len(data) < clippacloud.config.max_size:
             backend.save_data(data,filename)
         return True
@@ -119,6 +85,4 @@ def try_catch_clip(clipboard,backend):
         if len(content) < clippacloud.config.max_size:
             backend.save_data(content,filename)
         return True
-        #with open(path,'w') as clipfile:
-        #    clipfile.write(content)
     return False
