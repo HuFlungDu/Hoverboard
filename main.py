@@ -23,6 +23,7 @@ from clippacloud import plugin
 
 import icon
 import traceback
+from clippacloud import clipboard
 
 backend = None
 
@@ -259,7 +260,7 @@ def main():
         global paused
         try:
             if not paused:
-                cp = wx.Clipboard.Get()
+                cp = clipboard.Clipboard()
                 clipcatcher.try_catch_clip(cp,backend)
                 files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
                 if files:
@@ -267,7 +268,7 @@ def main():
                     if filedesc.modified > modified:
                         clippacloud.actions.set_clipboard_from_cloud(cp)
                         modified = filedesc.modified
-                    cp.Flush()
+                    cp.flush()
                     totalsize = sum(x.size for x in files)
                     while totalsize > config.max_size:
                         try:

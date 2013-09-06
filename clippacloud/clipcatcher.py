@@ -5,50 +5,53 @@ import os
 import tempfile
 import clippacloud
 import struct
+import clipboard
 
 content = None
 
 
-def waitfor_clip_content(clipboard):
+def waitfor_clip_content(cp):
     while True:
-        content = get_clip_content(clipboard)
+        content = get_clip_content(cp)
         if content:
             return content
         time.sleep(1)
 
-def get_clip_content(clipboard):
+def get_clip_content(cp):
     global content
-    if clipboard.Open():
-        text_data = wx.TextDataObject()
-        if clipboard.GetData(text_data):
-            newcontent = text_data.GetText()
+    if cp.open():
+        available = cp.get_available()
+        #text_data = wx.TextDataObject()
+        if available == clipboard.CP_TEXT:
+            newcontent = cp.get_data()
             if newcontent != content:
                 content = newcontent
-                clipboard.Close()
+                cp.close()
                 return content
-        bitmap_data = wx.BitmapDataObject()
-        if clipboard.GetData(bitmap_data):
-            image = bitmap_data.GetBitmap().ConvertToImage()
+        #bitmap_data = wx.BitmapDataObject()
+        elif available == clipboard.CP_IMAGE:
+            image = cp.get_data()
+            #bitmap_data.GetBitmap().ConvertToImage()
             # This is dumb, but for some reason the bitmap data is coming in differently even though it's all the same bitmap
             # No idea. Comparing height and width for now.
-            if isinstance(content,wx.Image) and (content.GetWidth() != image.GetWidth()) and (content.GetHeight() != image.GetHeight()): #(content.GetData() != image.GetData()):
+            if isinstance(content,clipboard.Image) and content != image: #(content.GetData() != image.GetData()):
                 content = image
-                clipboard.Close()
+                cp.close()
                 return content
-            elif not isinstance(content,wx.Image):
+            elif not isinstance(content,clipboard.Image):
                 content = image
-                clipboard.Close()
+                cp.close()
                 return content
-        clipboard.Close()
+        cp.close()
         return None
 
     else:
-        clipboard.Close()
+        cp.close()
         return None
 
 
-def catch_clip(clipboard,backend):
-    content = waitfor_clip_content(clipboard)
+def catch_clip(cp,backend):
+    content = waitfor_clip_content(cp)
     now = datetime.datetime.utcnow()
     filename = str(now)
     if isinstance(content,gtk.gdk.Pixbuf):
@@ -67,15 +70,15 @@ def catch_clip(clipboard,backend):
         if len(content) < clippacloud.config.max_size:
             backend.save_data(content,filename)
 
-def try_catch_clip(clipboard,backend):
-    content = get_clip_content(clipboard)
+def try_catch_clip(cp,backend):
+    content = get_clip_content(cp)
     now = datetime.datetime.utcnow()
     filename = str(now)
-    if isinstance(content,wx.Image):
-        filename += ".bmp"
-        data = struct.pack(">L",content.GetWidth()) + struct.pack(">L",content.GetHeight()) + content.GetData()
-        if content.HasAlpha():
-            data += content.GetAlphaData()
+    if isinstance(content,clipboard.Image):
+        filename += ".png"
+        data = content.get_data()
+        # if content.has_alpha():
+        #     data += content.get_alpha_data()
         if len(data) < clippacloud.config.max_size:
             backend.save_data(data,filename)
         return True
