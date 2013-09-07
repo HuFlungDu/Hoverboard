@@ -220,7 +220,10 @@ class Image(object):
     #         pass
 
     def __eq__(self,other):
-        return self.get_data() == other.get_data()
+        try:
+            return self.get_data() == other.get_data()
+        except AttributeError:
+            return False
         if _backend == "gtk2":
             return self.get_data() == other.get_data()
         elif _backend == "gtk3":

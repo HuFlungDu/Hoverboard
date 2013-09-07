@@ -129,8 +129,9 @@ class InitBackendWindow(wx.Frame):
         sizer.Add(backend_combo, flag=wx.EXPAND)
         box = wx.BoxSizer()
 
-        box.Add(cancel_button, flag=wx.ALIGN_RIGHT)
         box.Add(ok_button, flag=wx.ALIGN_RIGHT)
+        box.Add(cancel_button, flag=wx.ALIGN_RIGHT)
+        
 
         sizer.Add(wx.BoxSizer())
         sizer.Add(box,flag=wx.ALIGN_RIGHT)
@@ -140,6 +141,8 @@ class InitBackendWindow(wx.Frame):
         border.Add(sizer, 0, wx.ALL, 15)
         panel.SetSizerAndFit(border)
         self.Fit()
+
+        self.Bind(wx.EVT_CLOSE,self.on_cancel_button_clicked)
 
     def on_ok_button_clicked(self,button,combo,backends):
         try:
@@ -156,11 +159,12 @@ class InitBackendWindow(wx.Frame):
             wx.CallAfter(self.Destroy)
             wx.CallAfter(self.app.Exit)
         except Exception as e:
-            logger.error(traceback.format_exc())
+            logging.error(traceback.format_exc())
             self.Show(True)
 
     def on_cancel_button_clicked(self,button):
-        wx.CallAfter(self.Destroy())
+        wx.CallAfter(self.Destroy)
+        wx.CallAfter(self.app.Exit)
 
     def run(self,app):
         app.MainLoop()
@@ -222,10 +226,19 @@ class TaskBarIcon(wx.TaskBarIcon):
         wx.CallAfter(self.Destroy)
         self.top_window.Destroy()
 
+def make_backend(settings, app):
+    initwindow = InitBackendWindow(settings, clippacloud.backends, app)
+    initwindow.Show(True)
+    app.SetTopWindow(initwindow)
+    app.MainLoop()
+    backend = globals()["backend"]
+    return backend
+
 def main():
+    global backend
     parser = argparse.ArgumentParser(description='Cloud based clipboard syncing.')
     parser.add_argument('-c, --config', dest="config", type=str, nargs='?',
-                       help='config file for manager')
+                       help='config file for clippacloud')
     args = parser.parse_args()
     clippacloud.init(args)
     app = wx.App()
@@ -237,11 +250,9 @@ def main():
     settings = Settings.from_xml(settingstext)
     while True:
         if not settings.backend:
-            initwindow = InitBackendWindow(settings, clippacloud.backends, app)
-            initwindow.Show(True)
-            app.SetTopWindow(initwindow)
-            app.MainLoop()
-            backend = globals()["backend"]
+            backend = make_backend(settings,app)
+            if backend is None:
+                return 0
             settings.backend = backend.name
             settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
             break
@@ -258,6 +269,7 @@ def main():
     def idle_func():
         global modified
         global paused
+        global backend
         try:
             if not paused:
                 cp = clipboard.Clipboard()
@@ -277,20 +289,43 @@ def main():
                             pass
                         files = files[1:]
                         totalsize = sum(x.size for x in files)
+        except exceptions.AccessRevokedException:
+            dialog = wx.MessageDialog(frame,"Clippacloud's access for your backend has been revoked.\nWould you like to reauthenticate?",
+                                            "Access revoked",wx.YES_NO|wx.ICON_ERROR)
+            response = dialog.ShowModal()
+            if response != wx.ID_YES:
+                app.Exit()
+                return
+            backend = None
+            backend = make_backend(settings,app)
+            clippacloud.backend = backend
+            if backend is None:
+                app.Exit()
+                return
+            settings.backend = backend.name
+            settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
+
         except Exception as e:
             logging.error(traceback.format_exc())
         wx.CallLater(1000,idle_func)
     
     wx.CallLater(1000,idle_func)
     app.MainLoop()
+    try:
+        icon.Destroy()
+    except:
+        pass
     with open(settingsfilepath,"w") as outfile:
         outfile.write(ET.tostring(settings.to_xml()))
+    return 0
 
 
 if __name__ == '__main__':
     try:
-        main()
+        exit_code = main()
     except Exception as e:
+        exit_code = 1
         logging.error(traceback.format_exc())
     logging.info("Closing clippacloud")
     logging.shutdown()
+    exit(exit_code)

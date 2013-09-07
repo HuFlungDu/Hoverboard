@@ -3,3 +3,6 @@ class BackendNotFoundError(Exception):
 
 class FailedToCreateBackend(Exception):
     pass
+
+class AccessRevokedException(Exception):
+    pass

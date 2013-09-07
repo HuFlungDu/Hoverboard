@@ -1,4 +1,4 @@
-from clippacloud import plugin
+from clippacloud import plugin, exceptions
 import base64
 import time
 import datetime
@@ -58,53 +58,107 @@ class Backend(object):
 
 
     def save_file(self,filepath,outpath=None):
-        if outpath is None:
-            outpath = os.path.basename(filepath)
-        with open(filepath,"rb") as f:
-            self.client.put_file(outpath,f)
+        try:
+            if outpath is None:
+                outpath = os.path.basename(filepath)
+            with open(filepath,"rb") as f:
+                self.client.put_file(outpath,f)
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 401:
+                raise exceptions.AccessRevokedException()
+            else:
+                raise e
 
     def save_data(self,data,outpath):
-        self.client.put_file(outpath,data)
+        try:
+            self.client.put_file(outpath,data)
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 401:
+                raise exceptions.AccessRevokedException()
+            else:
+                raise e
 
     def remove_file(self,filename):
-        self.client.file_delete(filename)
+        try:
+            self.client.file_delete(filename)
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 401:
+                raise exceptions.AccessRevokedException()
+            else:
+                raise e
 
     def get_file(self,filename,path):
-        hfile = self.client.get_file(filename)
-        data = hfile.read()
-        os.path.join(path,filename).write(data)
+        try:
+            hfile = self.client.get_file(filename)
+            data = hfile.read()
+            os.path.join(path,filename).write(data)
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 401:
+                raise exceptions.AccessRevokedException()
+            else:
+                raise e
 
     def get_file_data(self,filename):
-        hfile = self.client.get_file(filename)
-        data = hfile.read()
-        return data
+        try:
+            hfile = self.client.get_file(filename)
+            data = hfile.read()
+            return data
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 401:
+                raise exceptions.AccessRevokedException()
+            else:
+                raise e
 
     def list_files(self):
-        has_more = True
-        while has_more:
-            delta = self.client.delta(self.delta)
-            entries, reset, self.delta, has_more = delta["entries"], delta["reset"], delta["cursor"], delta["has_more"]
-            for path,filedata in entries:
-                if filedata is None:
-                    try:
-                        del(self.files[path])
-                    except:
-                        pass
-                else:
-                    self.files[path] = plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"])
-        return self.files.values()
+        try:
+            has_more = True
+            while has_more:
+                delta = self.client.delta(self.delta)
+                entries, reset, self.delta, has_more = delta["entries"], delta["reset"], delta["cursor"], delta["has_more"]
+                for path,filedata in entries:
+                    if filedata is None:
+                        try:
+                            del(self.files[path])
+                        except:
+                            pass
+                    else:
+                        self.files[path] = plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"])
+            return self.files.values()
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 401:
+                raise exceptions.AccessRevokedException()
+            else:
+                raise e
 
     def get_connection_data(self):
-        data = {"key":self.access_token.key,"secret":self.access_token.secret}
-        return data
+        try:
+            data = {"key":self.access_token.key,"secret":self.access_token.secret}
+            return data
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 401:
+                raise exceptions.AccessRevokedException()
+            else:
+                raise e
 
     def get_latest_file(self,path):
-        filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
-        return self.get_file(filename,path)
+        try:
+            filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
+            return self.get_file(filename,path)
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 401:
+                raise exceptions.AccessRevokedException()
+            else:
+                raise e
 
     def get_latest_file_data(self):
-        filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
-        return self.get_file_data(filename)
+        try:
+            filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
+            return self.get_file_data(filename)
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 401:
+                raise exceptions.AccessRevokedException()
+            else:
+                raise e
 
     def check_validity(self):
         try:
