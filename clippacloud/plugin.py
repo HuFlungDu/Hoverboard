@@ -104,7 +104,7 @@ def make_dialog(definition):
     button_sizer.AddButton(cancel_button)
     button_sizer.Realize()
     if button_sizer:
-        mainvbox.Add(button_sizer,wx.ALIGN_RIGHT)
+        mainvbox.Add(button_sizer,0,wx.ALIGN_RIGHT|wx.TOP,15)
     border = wx.BoxSizer()
     border.Add(mainvbox, 0, wx.ALL, 15)
     panel.SetSizerAndFit(border)

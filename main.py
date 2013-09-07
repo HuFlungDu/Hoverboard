@@ -110,6 +110,7 @@ logging.info("Started clippacloud")
 class InitBackendWindow(wx.Frame):
     def __init__(self,settings, backends,app):
         wx.Frame.__init__(self,None,-1,"Initialize Backend")
+        self.Bind(wx.EVT_CLOSE,self.on_cancel_button_clicked)
         self.app = app
         panel = wx.Panel(self, -1)
 
@@ -118,31 +119,41 @@ class InitBackendWindow(wx.Frame):
 
         backend_combo.SetStringSelection(iter(backends).next())
 
+        mainvbox = wx.BoxSizer(wx.VERTICAL)
+
         ok_button = wx.Button(panel, wx.ID_OK)
         ok_button.Bind(wx.EVT_BUTTON,functools.partial(self.on_ok_button_clicked,combo=backend_combo,backends=backends))
         cancel_button = wx.Button(panel, wx.ID_CANCEL)
         cancel_button.Bind(wx.EVT_BUTTON,self.on_cancel_button_clicked)
 
-        sizer = wx.FlexGridSizer(2, 2, 5, 5)
-        sizer.AddGrowableCol(1)
-        sizer.Add(backendlabel,flag=wx.ALIGN_CENTER_VERTICAL)
-        sizer.Add(backend_combo, flag=wx.EXPAND)
-        box = wx.BoxSizer()
+        #sizer = wx.FlexGridSizer(2, 2, 5, 5)
+        #sizer.AddGrowableCol(1)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(backendlabel,0,wx.ALIGN_CENTER_VERTICAL|wx.RIGHT,5)
+        sizer.Add(backend_combo,1, flag=wx.EXPAND)
+        # box = wx.BoxSizer()
 
-        box.Add(ok_button, flag=wx.ALIGN_RIGHT)
-        box.Add(cancel_button, flag=wx.ALIGN_RIGHT)
+        mainvbox.Add(sizer,0,wx.EXPAND|wx.BOTTOM,15)
+
+        # box.Add(ok_button, flag=wx.ALIGN_RIGHT)
+        # box.Add(cancel_button, flag=wx.ALIGN_RIGHT)
+
+        button_sizer = wx.StdDialogButtonSizer()
+        button_sizer.AddButton(ok_button)
+        button_sizer.AddButton(cancel_button)
+        button_sizer.Realize()
         
 
-        sizer.Add(wx.BoxSizer())
-        sizer.Add(box,flag=wx.ALIGN_RIGHT)
+        #sizer.Add(wx.BoxSizer())
+        #sizer.Add(box,flag=wx.ALIGN_RIGHT)
 
+        if button_sizer:
+            mainvbox.Add(button_sizer,0,wx.EXPAND)
 
         border = wx.BoxSizer()
-        border.Add(sizer, 0, wx.ALL, 15)
+        border.Add(mainvbox, 1, wx.ALL|wx.EXPAND, 15)
         panel.SetSizerAndFit(border)
         self.Fit()
-
-        self.Bind(wx.EVT_CLOSE,self.on_cancel_button_clicked)
 
     def on_ok_button_clicked(self,button,combo,backends):
         try:
