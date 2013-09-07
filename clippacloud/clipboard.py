@@ -114,7 +114,7 @@ class Image(object):
             #     print width,height,stride_length, len(data)
             # self._image = GdkPixbuf.Pixbuf.new_from_data(data,GdkPixbuf.Colorspace.RGB,has_alpha,8,width,height,stride)
         elif _backend == "wx":
-            if isinstance(data,wx.Bitmap):
+            if isinstance(data,wx.Image):
                 self._image = data
             else:
                 sio = StringIO.StringIO(data)
@@ -335,7 +335,7 @@ class Clipboard(object):
                 return unicode(text_data.GetText())
             bitmap_data = wx.BitmapDataObject()
             if self._clipboard.GetData(bitmap_data):
-                image = bitmap_data.GetBitmap()
+                image = bitmap_data.GetBitmap().ConvertToImage()
                 return Image(image)
         elif _backend == "win32":
             pass
@@ -357,7 +357,7 @@ class Clipboard(object):
             if isinstance(data,(unicode,str)):
                 data = wx.TextDataObject(data)
             elif isinstance(data,Image):
-                data = wx.BitmapDataObject(data._image.ConvertToBitmap())
+                data = wx.BitmapDataObject(wx.BitmapFromImage(data._image))
             self._clipboard.AddData(data)
         elif _backend == "win32":
             pass
