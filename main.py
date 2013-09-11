@@ -245,12 +245,14 @@ def make_backend(settings, app):
     backend = globals()["backend"]
     return backend
 
-def main():
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
     global backend
     parser = argparse.ArgumentParser(description='Cloud based clipboard syncing.')
     parser.add_argument('-c, --config', dest="config", type=str, nargs='?',
                        help='config file for clippacloud')
-    args = parser.parse_args()
+    args = parser.parse_args(args=argv[1:])
     clippacloud.init(args)
     app = wx.App()
     app.SetTopWindow(None)
