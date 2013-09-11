@@ -301,7 +301,7 @@ def main():
                         files = files[1:]
                         totalsize = sum(x.size for x in files)
         except exceptions.AccessRevokedException:
-            dialog = wx.MessageDialog(frame,"Clippacloud's access for your backend has been revoked.\nWould you like to reauthenticate?",
+            dialog = wx.MessageDialog(None,"Clippacloud's access for your backend has been revoked.\nWould you like to reauthenticate?",
                                             "Access revoked",wx.YES_NO|wx.ICON_ERROR)
             response = dialog.ShowModal()
             if response != wx.ID_YES:
