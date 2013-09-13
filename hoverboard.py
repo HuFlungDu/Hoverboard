@@ -2,7 +2,6 @@ import wx
 import os
 import signal
 import xml.etree.ElementTree as ET
-import multiprocessing
 import argparse
 import tempfile
 import datetime
