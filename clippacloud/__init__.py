@@ -146,13 +146,13 @@ class SharedQueue(collections.deque):
 
 
 
-def init(args,settings):
+def init(args,settings,plugins_dir):
     if args.config:
         userconfig = imp.load_source('userconfig', args.config)
         userconfig.init(settings.config)
     else:
         config.init(max_size=settings.max_size,auto_push=settings.auto_push,auto_pull=settings.auto_pull)
-    globals()["plugins"] = plugin.get_plugins()
+    globals()["plugins"] = plugin.get_plugins(plugins_dir)
     globals()["backends"] = plugins[plugin.BACKEND_PLUGIN]
     globals()["settings"] = settings
     up_queue_lock = threading.Lock()

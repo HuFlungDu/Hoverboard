@@ -14,8 +14,8 @@ from collections import namedtuple
 
 import logging
 
-sys.path.append(os.path.dirname(__file__))
-
+# Look here first
+sys.path.insert(0,os.path.dirname(__file__))
 import clippacloud
 from clippacloud import exceptions
 from clippacloud import clipcatcher
@@ -407,7 +407,7 @@ def main(argv=None):
                        help='config file for clippacloud')
     args = parser.parse_args(args=argv[1:])
     settings = Settings.from_xml(settingstext)
-    clippacloud.init(args,settings)
+    clippacloud.init(args,settings,os.path.join(os.path.dirname(__file__),"plugins"))
     app = wx.App()
     app.SetTopWindow(None)
     # wx is a dummy dummy
