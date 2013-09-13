@@ -8,9 +8,7 @@ import StringIO
 import struct
 import clipboard
 
-def set_clipboard_from_cloud(cp):
-    path = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified, reverse=True)[0].path
-    data = clippacloud.backend.get_file_data(path)
+def set_clipboard_from_cloud(cp,data,path):
     if path.endswith(".txt"):
         clipcatcher.content = data
         cp.open()

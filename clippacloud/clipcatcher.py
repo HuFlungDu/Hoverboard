@@ -72,13 +72,15 @@ def try_catch_clip(cp,backend):
     if isinstance(content,clipboard.Image):
         filename += ".png"
         data = content.get_data()
-        if len(data) < clippacloud.config.max_size:
-            backend.save_data(data,filename)
-        return True
+        # if len(data) < clippacloud.config.max_size:
+        #     backend.save_data(data,filename)
+        return data, filename
+        # return True
         
     elif isinstance(content,(str,unicode)):
         filename += ".txt"
-        if len(content) < clippacloud.config.max_size:
-            backend.save_data(content,filename)
-        return True
-    return False
+        # if len(content) < clippacloud.config.max_size:
+        #     backend.save_data(content,filename)
+        return content, filename
+        # return True
+    # return False

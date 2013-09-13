@@ -364,18 +364,16 @@ class TaskBarIcon(wx.TaskBarIcon):
 
     def on_push(self,event):
         cp = clipboard.Clipboard()
-        clipcatcher.try_catch_clip(cp,clippacloud.backend)
+        clip = clipcatcher.try_catch_clip(cp,backend)
+        if clip is not None:
+            data, filename = clip
+            clippacloud.upload_list.append((data,filename))
 
     def on_pull(self,event):
-        global modified
-        cp = clipboard.Clipboard()
-        files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
-        if files:
-            filedesc = files[-1]
-            if filedesc.modified > modified:
-                clippacloud.actions.set_clipboard_from_cloud(cp)
-                modified = filedesc.modified
-            cp.flush()
+        if not any([x.is_alive() for x in clippacloud.pull_threads]):
+            pull_thread = clippacloud.PullClipThread(None,clippacloud.backend_lock,clippacloud.download_list,True)
+            clippacloud.pull_threads.append(pull_thread)
+            pull_thread.start()
 
     def on_settings(self,event):
         window = SettingsWindow(self.settings)
@@ -432,10 +430,7 @@ def main(argv=None):
             except Exception as e:
                 clippacloud.settings.backend = None
     clippacloud.backend = backend
-    global modified
-    modified = datetime.datetime.min
     def idle_func():
-        global modified
         global paused
         global backend
         try:
@@ -443,26 +438,15 @@ def main(argv=None):
                 files = None
                 if clippacloud.config.auto_push:
                     cp = clipboard.Clipboard()
-                    clipcatcher.try_catch_clip(cp,backend)
+                    clip = clipcatcher.try_catch_clip(cp,backend)
+                    if clip is not None:
+                        data, filename = clip
+                        clippacloud.upload_list.append((data,filename))
                 if clippacloud.config.auto_pull:
-                    files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
-                    if files:
-                        filedesc = files[-1]
-                        if filedesc.modified > modified:
-                            clippacloud.actions.set_clipboard_from_cloud(cp)
-                            modified = filedesc.modified
-                        cp.flush()
-                if files is None:
-                    files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
-                if files:
-                    totalsize = sum(x.size for x in files)
-                    while totalsize > config.max_size:
-                        try:
-                            clippacloud.backend.remove_file(files[0].path)
-                        except:
-                            pass
-                        files = files[1:]
-                        totalsize = sum(x.size for x in files)
+                    if not any([x.is_alive() for x in clippacloud.pull_threads]):
+                        pull_thread = clippacloud.PullClipThread(None,clippacloud.backend_lock,clippacloud.download_list,False)
+                        clippacloud.pull_threads.append(pull_thread)
+                        pull_thread.start()
         except exceptions.AccessRevokedException:
             dialog = wx.MessageDialog(None,"Clippacloud's access for your backend has been revoked.\nWould you like to reauthenticate?",
                                             "Access revoked",wx.YES_NO|wx.ICON_ERROR)
@@ -481,6 +465,34 @@ def main(argv=None):
 
         except Exception as e:
             logging.error(traceback.format_exc())
+        if len(clippacloud.download_list):
+            if clippacloud.backend is not None and clippacloud.backend.check_validity():
+                cp = clipboard.Clipboard()
+                data, filename = clippacloud.download_list.popleft()
+                try:
+                    clippacloud.actions.set_clipboard_from_cloud(cp,data,filename)
+                except exceptions.AccessRevokedException:
+                    print "here"
+                    clippacloud.access_revoked = True
+                except Exception as e:
+                    logging.error(traceback.format_exc())
+        if clippacloud.access_revoked:
+            dialog = wx.MessageDialog(None,"Clippacloud's access for your backend has been revoked.\nWould you like to reauthenticate?",
+                                            "Access revoked",wx.YES_NO|wx.ICON_ERROR)
+            response = dialog.ShowModal()
+            if response != wx.ID_YES:
+                app.Exit()
+                return
+            backend = None
+            backend = make_backend(clippacloud.settings,app)
+            clippacloud.backend = backend
+            if backend is None:
+                app.Exit()
+                return
+            clippacloud.settings.backend = backend.name
+            clippacloud.settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
+            clippacloud.access_revoked = False
+        clippacloud.pull_threads = filter(lambda x: x.is_alive(),clippacloud.pull_threads)
         wx.CallLater(1000,idle_func)
     
     wx.CallLater(1000,idle_func)
@@ -502,4 +514,8 @@ if __name__ == '__main__':
         logging.error(traceback.format_exc())
     logging.info("Closing clippacloud")
     logging.shutdown()
+    clippacloud.upload_thread.stop()
+    clippacloud.cleanup_thread.stop()
+    for pull_thread in clippacloud.pull_threads:
+        pull_thread.stop()
     exit(exit_code)
