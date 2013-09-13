@@ -10,6 +10,7 @@ import time
 import base64
 import functools
 import sys
+from collections import namedtuple
 
 import logging
 
@@ -28,13 +29,18 @@ from clippacloud import clipboard
 backend = None
 
 class Settings(object):
-    def __init__(self, backend, connectiondata):
+    def __init__(self, backend, connectiondata, max_size=None, auto_push=None, auto_pull=None):
         self._backend = backend
         self._connectiondata = connectiondata
         self.xml = ET.Element("Settings")
+        self.max_size = self._max_size = 1024*1024 if max_size is None else max_size
+        self.auto_push = self._auto_push = True if auto_push is None else auto_push
+        self.auto_pull = self._auto_pull = True if auto_pull is None else auto_pull
+
+
         self.backend = backend
         self.connectiondata = connectiondata
-        pass
+        
 
     def to_xml(self):
         return self.xml
@@ -69,6 +75,53 @@ class Settings(object):
             conn.remove(conndata)
         conn.append(value)
 
+    @property
+    def max_size(self):
+        return self._max_size
+
+    @max_size.setter
+    def max_size(self,value):
+        config = self.xml.find("Config")
+        if config is None:
+            config = ET.Element("Config")
+            self.xml.append(config)
+        config.set("max_size",str(value))
+        self._max_size = value
+
+    @property
+    def auto_push(self):
+        return self._auto_push
+
+    @auto_push.setter
+    def auto_push(self,value):
+        config = self.xml.find("Config")
+        if config is None:
+            config = ET.Element("Config")
+            self.xml.append(config)
+        config.set("auto_push",str(value))
+        self._auto_push = value
+
+    @property
+    def auto_pull(self):
+        return self._auto_pull
+
+    @auto_pull.setter
+    def auto_pull(self,value):
+        config = self.xml.find("Config")
+        if config is None:
+            config = ET.Element("Config")
+            self.xml.append(config)
+        config.set("auto_pull",str(value))
+        self._auto_pull = value
+
+    @property
+    def config(self):
+        config = self.xml.find("Config")
+        attribs = config.items()
+        config_tuple = namedtuple("config",[key for key, __ in attribs])
+        out_tuple = config_tuple(**dict(attribs))
+        return out_tuple
+
     @classmethod
     def from_xml(cls,settingstext):
 
@@ -83,7 +136,21 @@ class Settings(object):
         else:
             backend = ""
             connectiondata = ET.Element("ConnectionData")
-        return cls(backend,connectiondata)
+        max_size = None
+        auto_pull = None
+        auto_push = None
+        configxml = settingsxml.find("Config")
+        if configxml is not None:
+            max_size = configxml.get("max_size",None)
+            auto_push = configxml.get("auto_push",None)
+            auto_pull = configxml.get("auto_pull",None)
+            if max_size is not None:
+                max_size = int(max_size)
+            if auto_pull is not None:
+                auto_pull = auto_pull == "True"
+            if auto_push is not None:
+                auto_push = auto_push == "True"
+        return cls(backend,connectiondata,max_size,auto_push,auto_pull)
 
 projectname = "clippacloud"
 if os.name != "posix":
@@ -126,26 +193,16 @@ class InitBackendWindow(wx.Frame):
         cancel_button = wx.Button(panel, wx.ID_CANCEL)
         cancel_button.Bind(wx.EVT_BUTTON,self.on_cancel_button_clicked)
 
-        #sizer = wx.FlexGridSizer(2, 2, 5, 5)
-        #sizer.AddGrowableCol(1)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(backendlabel,0,wx.ALIGN_CENTER_VERTICAL|wx.RIGHT,5)
         sizer.Add(backend_combo,1, flag=wx.EXPAND)
-        # box = wx.BoxSizer()
 
         mainvbox.Add(sizer,0,wx.EXPAND|wx.BOTTOM,15)
-
-        # box.Add(ok_button, flag=wx.ALIGN_RIGHT)
-        # box.Add(cancel_button, flag=wx.ALIGN_RIGHT)
 
         button_sizer = wx.StdDialogButtonSizer()
         button_sizer.AddButton(ok_button)
         button_sizer.AddButton(cancel_button)
         button_sizer.Realize()
-        
-
-        #sizer.Add(wx.BoxSizer())
-        #sizer.Add(box,flag=wx.ALIGN_RIGHT)
 
         if button_sizer:
             mainvbox.Add(button_sizer,0,wx.EXPAND)
@@ -166,7 +223,6 @@ class InitBackendWindow(wx.Frame):
 
         try:
             globals()["backend"].create_new()
-            #self.DestroyChildren()
             wx.CallAfter(self.Destroy)
             wx.CallAfter(self.app.Exit)
         except Exception as e:
@@ -181,6 +237,74 @@ class InitBackendWindow(wx.Frame):
         app.MainLoop()
         return globals()["backend"]
 
+class SettingsWindow(object):
+    def __init__(self, settings):
+        self.settings = settings
+        self.values = {}
+        self.window = wx.Dialog(None,-1,"Clippacloud Settings")
+        panel = wx.Panel(self.window, -1)
+        mainvbox = wx.BoxSizer(wx.VERTICAL)
+
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        label = wx.StaticText(panel,-1,"Max size to use (mb): ")
+        spinner = wx.SpinCtrl(panel,-1,str(settings.max_size/(1024*1024)),min=1,max=1000)
+        spinner.Bind(wx.EVT_SPINCTRL,functools.partial(self.on_spinner_change,spinner=spinner,property="max_size",multiplier=(1024*1024),integer=True))
+        self.values["max_size"] = settings.max_size
+
+        sizer.Add(label,0,wx.RIGHT|wx.wx.ALIGN_CENTER_VERTICAL,5)
+        sizer.Add(spinner,1,wx.EXPAND,0)
+
+        mainvbox.Add(sizer,0,wx.EXPAND|wx.BOTTOM,15)
+
+        auto_push_box = wx.CheckBox(panel,-1,"Automatically push clipboard content to server")
+        auto_push_box.SetValue(settings.auto_push)
+        auto_push_box.Bind(wx.EVT_CHECKBOX,functools.partial(self.on_check_pressed,box=auto_push_box,property="auto_push"))
+        self.values["auto_push"] = settings.auto_push
+        mainvbox.Add(auto_push_box,0,wx.EXPAND|wx.BOTTOM,15)
+
+        auto_pull_box = wx.CheckBox(panel,-1,"Automatically pull clipboard content from server")
+        auto_pull_box.SetValue(settings.auto_pull)
+        auto_pull_box.Bind(wx.EVT_CHECKBOX,functools.partial(self.on_check_pressed,box=auto_pull_box,property="auto_pull"))
+        self.values["auto_pull"] = settings.auto_pull
+        mainvbox.Add(auto_pull_box,0,wx.EXPAND|wx.BOTTOM,15)
+
+        label = wx.StaticText(panel,-1,"*Note: These settings are likely ineffectual if you are using the -(-)c(onfig) option")
+
+        mainvbox.Add(label,0,wx.EXPAND|wx.BOTTOM,15)
+
+        ok_button = wx.Button(panel, wx.ID_OK)
+        cancel_button = wx.Button(panel, wx.ID_CANCEL)
+
+        
+        button_sizer = wx.StdDialogButtonSizer()
+        button_sizer.AddButton(ok_button)
+        button_sizer.AddButton(cancel_button)
+        button_sizer.Realize()
+
+        if button_sizer:
+            mainvbox.Add(button_sizer,0,wx.EXPAND)
+
+        border = wx.BoxSizer()
+        border.Add(mainvbox, 1, wx.ALL|wx.EXPAND, 15)
+        panel.SetSizerAndFit(border)
+        self.window.Fit()
+
+    # Thin wrapper
+    def __getattr__(self,name):
+        return getattr(self.window,name)
+
+    def on_check_pressed(self,event,box,property):
+        self.values[property] = box.GetValue()
+
+    def on_spinner_change(self,event,spinner,property,multiplier=1, integer=False):
+        value = spinner.GetValue()
+        value *= multiplier
+        if integer:
+            value = int(value)
+        self.values[property] = value
+
+
+
 paused = False
 
 def create_menu_item(menu, label, func):
@@ -190,9 +314,11 @@ def create_menu_item(menu, label, func):
     return item
 
 class TaskBarIcon(wx.TaskBarIcon):
-    def __init__(self, top_window):
+    def __init__(self, top_window, app, settings):
         # If we are using the development branch on Mac OSX, we can make it a menu bar item
         self.top_window = top_window
+        self.settings = settings
+        self.app = app
         # Cache
         icon.getTrayIconPausedIcon()
         if sys.platform == "darwin":
@@ -214,7 +340,12 @@ class TaskBarIcon(wx.TaskBarIcon):
             label = "Resume Clippacloud"
         else:
             label = "Pause Clippacloud"
+        create_menu_item(menu, "Settings", self.on_settings)
         create_menu_item(menu, label, self.on_pause)
+        if not clippacloud.config.auto_push:
+            create_menu_item(menu, "Push clipboard now", self.on_push)
+        if not clippacloud.config.auto_pull:
+            create_menu_item(menu, "Pull clipboard now", self.on_pull)
         menu.AppendSeparator()
         create_menu_item(menu, 'Exit Clippacloud', self.on_exit)
         return menu
@@ -230,11 +361,35 @@ class TaskBarIcon(wx.TaskBarIcon):
             self.SetIcon(icon.getTrayIconPausedIcon(),"Clippacloud")
         else:
             self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
-        
+
+    def on_push(self,event):
+        cp = clipboard.Clipboard()
+        clipcatcher.try_catch_clip(cp,clippacloud.backend)
+
+    def on_pull(self,event):
+        global modified
+        cp = clipboard.Clipboard()
+        files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
+        if files:
+            filedesc = files[-1]
+            if filedesc.modified > modified:
+                clippacloud.actions.set_clipboard_from_cloud(cp)
+                modified = filedesc.modified
+            cp.flush()
+
+    def on_settings(self,event):
+        window = SettingsWindow(self.settings)
+        result = window.ShowModal()
+        window.Destroy()
+        if result == wx.ID_OK:
+            clippacloud.settings.max_size = clippacloud.config.max_size = window.values["max_size"]
+            clippacloud.settings.auto_pull = clippacloud.config.auto_pull = window.values["auto_pull"]
+            clippacloud.settings.auto_push = clippacloud.config.auto_push = window.values["auto_push"]       
 
 
     def on_exit(self, event):
         wx.CallAfter(self.Destroy)
+        wx.CallAfter(self.app.Exit)
         self.top_window.Destroy()
 
 def make_backend(settings, app):
@@ -253,29 +408,29 @@ def main(argv=None):
     parser.add_argument('-c, --config', dest="config", type=str, nargs='?',
                        help='config file for clippacloud')
     args = parser.parse_args(args=argv[1:])
-    clippacloud.init(args)
+    settings = Settings.from_xml(settingstext)
+    clippacloud.init(args,settings)
     app = wx.App()
     app.SetTopWindow(None)
     # wx is a dummy dummy
     frame = wx.Frame(None)
     app.SetTopWindow(frame)
-    icon = TaskBarIcon(frame)
-    settings = Settings.from_xml(settingstext)
+    icon = TaskBarIcon(frame,app,settings)
     while True:
-        if not settings.backend:
+        if not clippacloud.settings.backend:
             backend = make_backend(settings,app)
             if backend is None:
                 return 0
-            settings.backend = backend.name
-            settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
+            clippacloud.settings.backend = backend.name
+            clippacloud.settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
             break
         else:
             try:
-                backend = clippacloud.backends[settings.backend]()
-                backend.resume(settings.connectiondata)
+                backend = clippacloud.backends[clippacloud.settings.backend]()
+                backend.resume(clippacloud.settings.connectiondata)
                 break
             except Exception as e:
-                settings.backend = None
+                clippacloud.settings.backend = None
     clippacloud.backend = backend
     global modified
     modified = datetime.datetime.min
@@ -285,15 +440,21 @@ def main(argv=None):
         global backend
         try:
             if not paused:
-                cp = clipboard.Clipboard()
-                clipcatcher.try_catch_clip(cp,backend)
-                files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
+                files = None
+                if clippacloud.config.auto_push:
+                    cp = clipboard.Clipboard()
+                    clipcatcher.try_catch_clip(cp,backend)
+                if clippacloud.config.auto_pull:
+                    files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
+                    if files:
+                        filedesc = files[-1]
+                        if filedesc.modified > modified:
+                            clippacloud.actions.set_clipboard_from_cloud(cp)
+                            modified = filedesc.modified
+                        cp.flush()
+                if files is None:
+                    files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
                 if files:
-                    filedesc = files[-1]
-                    if filedesc.modified > modified:
-                        clippacloud.actions.set_clipboard_from_cloud(cp)
-                        modified = filedesc.modified
-                    cp.flush()
                     totalsize = sum(x.size for x in files)
                     while totalsize > config.max_size:
                         try:
@@ -310,13 +471,13 @@ def main(argv=None):
                 app.Exit()
                 return
             backend = None
-            backend = make_backend(settings,app)
+            backend = make_backend(clippacloud.settings,app)
             clippacloud.backend = backend
             if backend is None:
                 app.Exit()
                 return
-            settings.backend = backend.name
-            settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
+            clippacloud.settings.backend = backend.name
+            clippacloud.settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
 
         except Exception as e:
             logging.error(traceback.format_exc())
@@ -329,7 +490,7 @@ def main(argv=None):
     except:
         pass
     with open(settingsfilepath,"w") as outfile:
-        outfile.write(ET.tostring(settings.to_xml()))
+        outfile.write(ET.tostring(clippacloud.settings.to_xml()))
     return 0
 
 
