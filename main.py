@@ -16,15 +16,15 @@ import logging
 
 # Look here first
 sys.path.insert(0,os.path.dirname(__file__))
-import clippacloud
-from clippacloud import exceptions
-from clippacloud import clipcatcher
-from clippacloud import config
-from clippacloud import plugin
+import hoverboard
+from hoverboard import exceptions
+from hoverboard import clipcatcher
+from hoverboard import config
+from hoverboard import plugin
 
 import icon
 import traceback
-from clippacloud import clipboard
+from hoverboard import clipboard
 
 backend = None
 
@@ -152,7 +152,7 @@ class Settings(object):
                 auto_push = auto_push == "True"
         return cls(backend,connectiondata,max_size,auto_push,auto_pull)
 
-projectname = "clippacloud"
+projectname = "hoverboard"
 if os.name != "posix":
     from win32com.shell import shellcon, shell
     homedir = shell.SHGetFolderPath(0, shellcon.CSIDL_APPDATA, 0, 0)
@@ -170,9 +170,9 @@ with open(settingsfilepath,'r') as settingsfile:
     settingstext = settingsfile.read()
 
 FORMAT = '%(asctime)-15s %(message)s'
-logfilepath = os.path.join(settingsdirectory,"clippacloud.log")
+logfilepath = os.path.join(settingsdirectory,"hoverboard.log")
 logging.basicConfig(format=FORMAT,filename=logfilepath)
-logging.info("Started clippacloud")
+logging.info("Started hoverboard")
 
 class InitBackendWindow(wx.Frame):
     def __init__(self,settings, backends,app):
@@ -241,7 +241,7 @@ class SettingsWindow(object):
     def __init__(self, settings):
         self.settings = settings
         self.values = {}
-        self.window = wx.Dialog(None,-1,"Clippacloud Settings")
+        self.window = wx.Dialog(None,-1,"Hoverboard Settings")
         panel = wx.Panel(self.window, -1)
         mainvbox = wx.BoxSizer(wx.VERTICAL)
 
@@ -324,55 +324,55 @@ class TaskBarIcon(wx.TaskBarIcon):
         if sys.platform == "darwin":
             try:
                 super(TaskBarIcon, self).__init__(wx.TBI_CUSTOM_STATUSITEM)
-                self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
+                self.SetIcon(icon.getTrayIconIcon(),"Hoverboard")
             except (AttributeError,wx._core.PyAssertionError):
                 super(TaskBarIcon, self).__init__(wx.TBI_DOCK)
-                self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
+                self.SetIcon(icon.getTrayIconIcon(),"Hoverboard")
         else:
             super(TaskBarIcon, self).__init__()
-            self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
+            self.SetIcon(icon.getTrayIconIcon(),"Hoverboard")
 
 
     def CreatePopupMenu(self):
         global paused
         menu = wx.Menu()
         if paused:
-            label = "Resume Clippacloud"
+            label = "Resume Hoverboard"
         else:
-            label = "Pause Clippacloud"
+            label = "Pause Hoverboard"
         create_menu_item(menu, "Settings", self.on_settings)
         create_menu_item(menu, label, self.on_pause)
-        if not clippacloud.config.auto_push:
+        if not hoverboard.config.auto_push:
             create_menu_item(menu, "Push clipboard now", self.on_push)
-        if not clippacloud.config.auto_pull:
+        if not hoverboard.config.auto_pull:
             create_menu_item(menu, "Pull clipboard now", self.on_pull)
         menu.AppendSeparator()
-        create_menu_item(menu, 'Exit Clippacloud', self.on_exit)
+        create_menu_item(menu, 'Exit Hoverboard', self.on_exit)
         return menu
 
     def set_icon(self, path):
         icon = wx.IconFromBitmap(wx.Bitmap(path))
-        self.SetIcon(icon, "Clippacloud")
+        self.SetIcon(icon, "Hoverboard")
 
     def on_pause(self, event):
         global paused
         paused = not paused
         if paused:
-            self.SetIcon(icon.getTrayIconPausedIcon(),"Clippacloud")
+            self.SetIcon(icon.getTrayIconPausedIcon(),"Hoverboard")
         else:
-            self.SetIcon(icon.getTrayIconIcon(),"Clippacloud")
+            self.SetIcon(icon.getTrayIconIcon(),"Hoverboard")
 
     def on_push(self,event):
         cp = clipboard.Clipboard()
         clip = clipcatcher.try_catch_clip(cp,backend)
         if clip is not None:
             data, filename = clip
-            clippacloud.upload_list.append((data,filename))
+            hoverboard.upload_list.append((data,filename))
 
     def on_pull(self,event):
-        if not any([x.is_alive() for x in clippacloud.pull_threads]):
-            pull_thread = clippacloud.PullClipThread(None,clippacloud.backend_lock,clippacloud.download_list,True)
-            clippacloud.pull_threads.append(pull_thread)
+        if not any([x.is_alive() for x in hoverboard.pull_threads]):
+            pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,True)
+            hoverboard.pull_threads.append(pull_thread)
             pull_thread.start()
 
     def on_settings(self,event):
@@ -380,9 +380,9 @@ class TaskBarIcon(wx.TaskBarIcon):
         result = window.ShowModal()
         window.Destroy()
         if result == wx.ID_OK:
-            clippacloud.settings.max_size = clippacloud.config.max_size = window.values["max_size"]
-            clippacloud.settings.auto_pull = clippacloud.config.auto_pull = window.values["auto_pull"]
-            clippacloud.settings.auto_push = clippacloud.config.auto_push = window.values["auto_push"]       
+            hoverboard.settings.max_size = hoverboard.config.max_size = window.values["max_size"]
+            hoverboard.settings.auto_pull = hoverboard.config.auto_pull = window.values["auto_pull"]
+            hoverboard.settings.auto_push = hoverboard.config.auto_push = window.values["auto_push"]       
 
 
     def on_exit(self, event):
@@ -391,7 +391,7 @@ class TaskBarIcon(wx.TaskBarIcon):
         self.top_window.Destroy()
 
 def make_backend(settings, app):
-    initwindow = InitBackendWindow(settings, clippacloud.backends, app)
+    initwindow = InitBackendWindow(settings, hoverboard.backends, app)
     initwindow.Show(True)
     app.SetTopWindow(initwindow)
     app.MainLoop()
@@ -404,10 +404,10 @@ def main(argv=None):
     global backend
     parser = argparse.ArgumentParser(description='Cloud based clipboard syncing.')
     parser.add_argument('-c, --config', dest="config", type=str, nargs='?',
-                       help='config file for clippacloud')
+                       help='config file for hoverboard')
     args = parser.parse_args(args=argv[1:])
     settings = Settings.from_xml(settingstext)
-    clippacloud.init(args,settings,os.path.join(os.path.dirname(__file__),"plugins"))
+    hoverboard.init(args,settings,os.path.join(os.path.dirname(__file__),"plugins"))
     app = wx.App()
     app.SetTopWindow(None)
     # wx is a dummy dummy
@@ -415,84 +415,84 @@ def main(argv=None):
     app.SetTopWindow(frame)
     icon = TaskBarIcon(frame,app,settings)
     while True:
-        if not clippacloud.settings.backend:
+        if not hoverboard.settings.backend:
             backend = make_backend(settings,app)
             if backend is None:
                 return 0
-            clippacloud.settings.backend = backend.name
-            clippacloud.settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
+            hoverboard.settings.backend = backend.name
+            hoverboard.settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
             break
         else:
             try:
-                backend = clippacloud.backends[clippacloud.settings.backend]()
-                backend.resume(clippacloud.settings.connectiondata)
+                backend = hoverboard.backends[hoverboard.settings.backend]()
+                backend.resume(hoverboard.settings.connectiondata)
                 break
             except Exception as e:
-                clippacloud.settings.backend = None
-    clippacloud.backend = backend
+                hoverboard.settings.backend = None
+    hoverboard.backend = backend
     def idle_func():
         global paused
         global backend
         try:
             if not paused:
                 files = None
-                if clippacloud.config.auto_push:
+                if hoverboard.config.auto_push:
                     cp = clipboard.Clipboard()
                     clip = clipcatcher.try_catch_clip(cp,backend)
                     if clip is not None:
                         data, filename = clip
-                        clippacloud.upload_list.append((data,filename))
-                if clippacloud.config.auto_pull:
-                    if not any([x.is_alive() for x in clippacloud.pull_threads]):
-                        pull_thread = clippacloud.PullClipThread(None,clippacloud.backend_lock,clippacloud.download_list,False)
-                        clippacloud.pull_threads.append(pull_thread)
+                        hoverboard.upload_list.append((data,filename))
+                if hoverboard.config.auto_pull:
+                    if not any([x.is_alive() for x in hoverboard.pull_threads]):
+                        pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,False)
+                        hoverboard.pull_threads.append(pull_thread)
                         pull_thread.start()
         except exceptions.AccessRevokedException:
-            dialog = wx.MessageDialog(None,"Clippacloud's access for your backend has been revoked.\nWould you like to reauthenticate?",
+            dialog = wx.MessageDialog(None,"Hoverboard's access for your backend has been revoked.\nWould you like to reauthenticate?",
                                             "Access revoked",wx.YES_NO|wx.ICON_ERROR)
             response = dialog.ShowModal()
             if response != wx.ID_YES:
                 app.Exit()
                 return
             backend = None
-            backend = make_backend(clippacloud.settings,app)
-            clippacloud.backend = backend
+            backend = make_backend(hoverboard.settings,app)
+            hoverboard.backend = backend
             if backend is None:
                 app.Exit()
                 return
-            clippacloud.settings.backend = backend.name
-            clippacloud.settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
+            hoverboard.settings.backend = backend.name
+            hoverboard.settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
 
         except Exception as e:
             logging.error(traceback.format_exc())
-        if len(clippacloud.download_list):
-            if clippacloud.backend is not None and clippacloud.backend.check_validity():
+        if len(hoverboard.download_list):
+            if hoverboard.backend is not None and hoverboard.backend.check_validity():
                 cp = clipboard.Clipboard()
-                data, filename = clippacloud.download_list.popleft()
+                data, filename = hoverboard.download_list.popleft()
                 try:
-                    clippacloud.actions.set_clipboard_from_cloud(cp,data,filename)
+                    hoverboard.actions.set_clipboard_from_cloud(cp,data,filename)
                 except exceptions.AccessRevokedException:
                     print "here"
-                    clippacloud.access_revoked = True
+                    hoverboard.access_revoked = True
                 except Exception as e:
                     logging.error(traceback.format_exc())
-        if clippacloud.access_revoked:
-            dialog = wx.MessageDialog(None,"Clippacloud's access for your backend has been revoked.\nWould you like to reauthenticate?",
+        if hoverboard.access_revoked:
+            dialog = wx.MessageDialog(None,"Hoverboard's access for your backend has been revoked.\nWould you like to reauthenticate?",
                                             "Access revoked",wx.YES_NO|wx.ICON_ERROR)
             response = dialog.ShowModal()
             if response != wx.ID_YES:
                 app.Exit()
                 return
             backend = None
-            backend = make_backend(clippacloud.settings,app)
-            clippacloud.backend = backend
+            backend = make_backend(hoverboard.settings,app)
+            hoverboard.backend = backend
             if backend is None:
                 app.Exit()
                 return
-            clippacloud.settings.backend = backend.name
-            clippacloud.settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
-            clippacloud.access_revoked = False
-        clippacloud.pull_threads = filter(lambda x: x.is_alive(),clippacloud.pull_threads)
+            hoverboard.settings.backend = backend.name
+            hoverboard.settings.connectiondata = ET.Element("ConnectionData",backend.get_connection_data())
+            hoverboard.access_revoked = False
+        hoverboard.pull_threads = filter(lambda x: x.is_alive(),hoverboard.pull_threads)
         wx.CallLater(1000,idle_func)
     
     wx.CallLater(1000,idle_func)
@@ -502,7 +502,7 @@ def main(argv=None):
     except:
         pass
     with open(settingsfilepath,"w") as outfile:
-        outfile.write(ET.tostring(clippacloud.settings.to_xml()))
+        outfile.write(ET.tostring(hoverboard.settings.to_xml()))
     return 0
 
 
@@ -512,10 +512,10 @@ if __name__ == '__main__':
     except Exception as e:
         exit_code = 1
         logging.error(traceback.format_exc())
-    logging.info("Closing clippacloud")
+    logging.info("Closing hoverboard")
     logging.shutdown()
-    clippacloud.upload_thread.stop()
-    clippacloud.cleanup_thread.stop()
-    for pull_thread in clippacloud.pull_threads:
+    hoverboard.upload_thread.stop()
+    hoverboard.cleanup_thread.stop()
+    for pull_thread in hoverboard.pull_threads:
         pull_thread.stop()
     exit(exit_code)

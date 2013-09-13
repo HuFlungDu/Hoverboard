@@ -1,4 +1,4 @@
-from clippacloud import plugin, exceptions
+from hoverboard import plugin, exceptions
 import base64
 import time
 import datetime

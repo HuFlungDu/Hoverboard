@@ -1,4 +1,4 @@
-from clippacloud import plugin
+from hoverboard import plugin
 import base64
 import time
 import datetime

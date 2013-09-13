@@ -1,4 +1,4 @@
-from clippacloud import plugin
+from hoverboard import plugin
 from dropbox import Backend
 
 plugin_name = "Dropbox"
