@@ -2,10 +2,8 @@ import wx
 import time
 import datetime
 import os
-import tempfile
 import hoverboard
-import struct
-import clipboard
+from hoverboard import clipboard
 
 content = None
 

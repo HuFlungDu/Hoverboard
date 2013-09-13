@@ -1,12 +1,6 @@
-from hoverboard import exceptions
-from hoverboard import clipcatcher
 import hoverboard
-import wx
-import tempfile
-import os
-import StringIO
-import struct
-import clipboard
+from hoverboard import clipcatcher
+from hoverboard import clipboard
 
 def set_clipboard_from_cloud(cp,data,path):
     if path.endswith(".txt"):

@@ -1,6 +1,5 @@
 from hoverboard import plugin, exceptions
 import base64
-import time
 import datetime
 import sys
 import os

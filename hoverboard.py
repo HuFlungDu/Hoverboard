@@ -1,12 +1,7 @@
 import wx
 import os
-import signal
 import xml.etree.ElementTree as ET
 import argparse
-import tempfile
-import datetime
-import time
-import base64
 import functools
 import sys
 from collections import namedtuple
@@ -18,12 +13,11 @@ sys.path.insert(0,os.path.dirname(__file__))
 import hoverboard
 from hoverboard import exceptions
 from hoverboard import clipcatcher
-from hoverboard import config
-from hoverboard import plugin
+from hoverboard import clipboard
 
 import icon
 import traceback
-from hoverboard import clipboard
+
 
 backend = None
 

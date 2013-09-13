@@ -1,5 +1,3 @@
-from hoverboard import actions
-
 max_size = 1024*1024
 auto_push = True
 auto_pull = True
