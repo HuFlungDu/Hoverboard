@@ -6,6 +6,7 @@ from clippacloud import clipboard
 import threading
 import collections
 import logging
+import traceback
 import time
 import datetime
 
@@ -69,6 +70,8 @@ class CleanupThread(threading.Thread):
                         files = sorted(clippacloud.backend.list_files(), key=lambda x: x.modified)
                     except exceptions.AccessRevokedException:
                         clippacloud.access_revoked = True
+                    except Exception as e:
+                        logging.error(traceback.format_exc())
                 if files and not clippacloud.access_revoked:
                     totalsize = sum(x.size for x in files)
                     while totalsize > config.max_size:
