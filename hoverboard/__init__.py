@@ -3,6 +3,7 @@ from hoverboard import config
 from hoverboard import plugin
 from hoverboard import exceptions
 from hoverboard import clipboard
+from hoverboard import actions
 import threading
 import collections
 import logging
@@ -36,16 +37,15 @@ class UploadThread(threading.Thread):
             if self.stopped():
                 break
             if len(queue):
-                if hoverboard.backend is not None and hoverboard.backend.check_validity():
-                    data, filename = queue.popleft()
-                    try:
+                try:
+                    if hoverboard.backend is not None and hoverboard.backend.check_validity():
+                        data, filename = queue.popleft()
                         if len(data) < hoverboard.config.max_size:
                             backend.save_data(data,filename)
-                    except exceptions.AccessRevokedException:
-                        print "here"
-                        hoverboard.access_revoked = True
-                    except Exception as e:
-                        logging.error(traceback.format_exc())
+                except exceptions.AccessRevokedException:
+                    hoverboard.access_revoked = True
+                except Exception as e:
+                    logging.error(traceback.format_exc())
             time.sleep(.5)
 
 class CleanupThread(threading.Thread):
@@ -64,23 +64,23 @@ class CleanupThread(threading.Thread):
         while True:
             if self.stopped():
                 break
-            if hoverboard.backend is not None and hoverboard.backend.check_validity():
-                with lock:
-                    try:
+            try:
+                if hoverboard.backend is not None and hoverboard.backend.check_validity():
+                    with lock:
                         files = sorted(hoverboard.backend.list_files(), key=lambda x: x.modified)
-                    except exceptions.AccessRevokedException:
-                        hoverboard.access_revoked = True
-                    except Exception as e:
-                        logging.error(traceback.format_exc())
-                if files and not hoverboard.access_revoked:
-                    totalsize = sum(x.size for x in files)
-                    while totalsize > config.max_size:
-                        try:
-                            hoverboard.backend.remove_file(files[0].path)
-                        except:
-                            pass
-                        files = files[1:]
+                    if files and not hoverboard.access_revoked:
                         totalsize = sum(x.size for x in files)
+                        while totalsize > config.max_size:
+                            try:
+                                hoverboard.backend.remove_file(files[0].path)
+                            except:
+                                pass
+                            files = files[1:]
+                            totalsize = sum(x.size for x in files)
+            except exceptions.AccessRevokedException:
+                hoverboard.access_revoked = True
+            except Exception as e:
+                logging.error(traceback.format_exc())
             time.sleep(.5)
 
 class PullClipThread(threading.Thread):
@@ -114,7 +114,14 @@ class PullClipThread(threading.Thread):
                         queue.append((data,path))
 
                     #cp.flush()
+            except exceptions.AccessRevokedException:
+                hoverboard.access_revoked = True
+                if not retry:
+                    break
+                time.sleep(.5)
+                continue
             except Exception as e:
+                print e
                 if not retry:
                     break
                 time.sleep(.5)

@@ -465,7 +465,6 @@ def main(argv=None):
                 try:
                     hoverboard.actions.set_clipboard_from_cloud(cp,data,filename)
                 except exceptions.AccessRevokedException:
-                    print "here"
                     hoverboard.access_revoked = True
                 except Exception as e:
                     logging.error(traceback.format_exc())

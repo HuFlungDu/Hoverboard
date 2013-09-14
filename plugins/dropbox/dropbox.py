@@ -163,5 +163,8 @@ class Backend(object):
         try:
             self.client.account_info()
             return True
-        except:
-            return False
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 401:
+                raise exceptions.AccessRevokedException()
+            else:
+                return False
