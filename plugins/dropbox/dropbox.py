@@ -25,15 +25,29 @@ class Backend(object):
         self.delta = None
         self.files = {}
 
-    def resume(self, init_data):
+    def resume(self, init_data, device_name):
         key = init_data.get("key")
         secret = init_data.get("secret")
         sess = session.DropboxSession(self._APP_KEY,self._APP_SECRET, self._ACCESS_TYPE )
         sess.set_token(key,secret)
         self.client = client.DropboxClient(sess)
         assert self.check_validity()
+        try:
+            self.client.file_create_folder("global")
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 403:
+                pass
+            else:
+                raise e
+        try:
+            self.client.file_create_folder(device_name)
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 403:
+                pass
+            else:
+                raise e
 
-    def create_new(self):
+    def create_new(self,device_name):
         sess = session.DropboxSession(self._APP_KEY, self._APP_SECRET, self._ACCESS_TYPE)
 
         request_token = sess.obtain_request_token()
@@ -54,6 +68,21 @@ class Backend(object):
 
         if not self.access_token:
             raise exceptions.FailedToCreateBackend
+
+        try:
+            self.client.file_create_folder("global")
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 403:
+                pass
+            else:
+                raise e
+        try:
+            self.client.file_create_folder(device_name)
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 403:
+                pass
+            else:
+                raise e
 
 
     def save_file(self,filepath,outpath=None):
@@ -108,26 +137,33 @@ class Backend(object):
             else:
                 raise e
 
-    def list_files(self):
+    def _refresh_files(self):
+        has_more = True
+        while has_more:
+            delta = self.client.delta(self.delta)
+            entries, reset, self.delta, has_more = delta["entries"], delta["reset"], delta["cursor"], delta["has_more"]
+            for path,filedata in entries:
+                if filedata is None:
+                    try:
+                        del(self.files[path])
+                    except:
+                        pass
+                else:
+                    self.files[path] = plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"],filedata["is_dir"])
+
+    def list_files(self,directory):
         try:
-            has_more = True
-            while has_more:
-                delta = self.client.delta(self.delta)
-                entries, reset, self.delta, has_more = delta["entries"], delta["reset"], delta["cursor"], delta["has_more"]
-                for path,filedata in entries:
-                    if filedata is None:
-                        try:
-                            del(self.files[path])
-                        except:
-                            pass
-                    else:
-                        self.files[path] = plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"])
-            return self.files.values()
+            self._refresh_files()
+            return [x for x in self.files.values() if x.path.startswith("/{}/".format(directory))]
         except dropboxlib.rest.ErrorResponse as e:
             if e.status == 401:
                 raise exceptions.AccessRevokedException()
             else:
                 raise e
+
+    def _list_dirs(self):
+        self._refresh_files()
+        return [x for x in self.files.values() if x.is_dir]
 
     def get_connection_data(self):
         try:
@@ -168,3 +204,19 @@ class Backend(object):
                 raise exceptions.AccessRevokedException()
             else:
                 return False
+
+    def get_devices(self,device_name):
+        directories = self._list_dirs()
+        dirnames = set(x.path.split("/")[1] for x in directories)
+        try:
+            dirnames.remove(device_name)
+        except:
+            pass
+        try:
+            dirnames.remove("global")
+        except:
+            pass
+        return list(dirnames)
+
+
+

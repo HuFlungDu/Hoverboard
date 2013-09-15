@@ -15,8 +15,11 @@ plugins = {}
 backends = {}
 backend = None
 last_modified = datetime.datetime.min
+last_modified_device = datetime.datetime.min
+last_pulled = "global"
 access_revoked = False
 pull_threads = []
+devices = []
 
 class UploadThread(threading.Thread):
     def __init__(self,group,queue_lock,queue):
@@ -39,9 +42,9 @@ class UploadThread(threading.Thread):
             if len(queue):
                 try:
                     if hoverboard.backend is not None and hoverboard.backend.check_validity():
-                        data, filename = queue.popleft()
+                        data, filename, directory = queue.popleft()
                         if len(data) < hoverboard.config.max_size:
-                            backend.save_data(data,filename)
+                            backend.save_data(data,"{}/{}".format(directory,filename))
                 except exceptions.AccessRevokedException:
                     hoverboard.access_revoked = True
                 except Exception as e:
@@ -49,9 +52,10 @@ class UploadThread(threading.Thread):
             time.sleep(.5)
 
 class CleanupThread(threading.Thread):
-    def __init__(self,group,backend_lock):
+    def __init__(self,group,backend_lock,device_name):
         threading.Thread.__init__(self,group=group, target=self.cleanup_thread_func, args=(backend_lock,))
         self._stop = threading.Event()
+        self.device_name = device_name
 
     def stop(self):
         self._stop.set()
@@ -65,18 +69,22 @@ class CleanupThread(threading.Thread):
             if self.stopped():
                 break
             try:
-                if hoverboard.backend is not None and hoverboard.backend.check_validity():
-                    with lock:
-                        files = sorted(hoverboard.backend.list_files(), key=lambda x: x.modified)
-                    if files and not hoverboard.access_revoked:
-                        totalsize = sum(x.size for x in files)
-                        while totalsize > config.max_size:
-                            try:
-                                hoverboard.backend.remove_file(files[0].path)
-                            except:
-                                pass
-                            files = files[1:]
+                # Not strictly cleanup, but I don't feel like starting up another thread.
+                hoverboard.devices = hoverboard.backend.get_devices(self.device_name)
+
+                for directory in ("global",self.device_name):
+                    if hoverboard.backend is not None and hoverboard.backend.check_validity() and directory:
+                        with lock:
+                            files = sorted(hoverboard.backend.list_files(directory), key=lambda x: x.modified)
+                        if files and not hoverboard.access_revoked:
                             totalsize = sum(x.size for x in files)
+                            while totalsize > config.max_size:
+                                try:
+                                    hoverboard.backend.remove_file(files[0].path)
+                                except:
+                                    pass
+                                files = files[1:]
+                                totalsize = sum(x.size for x in files)
             except exceptions.AccessRevokedException:
                 hoverboard.access_revoked = True
             except Exception as e:
@@ -84,8 +92,8 @@ class CleanupThread(threading.Thread):
             time.sleep(.5)
 
 class PullClipThread(threading.Thread):
-    def __init__(self,group,backend_lock,queue,retry=False):
-        threading.Thread.__init__(self,group=group, target=self.pull_clip_thread_func, args=(backend_lock,queue,retry))
+    def __init__(self,group,backend_lock,queue,retry=False,directory="global"):
+        threading.Thread.__init__(self,group=group, target=self.pull_clip_thread_func, args=(backend_lock,queue,retry,directory))
         self._stop = threading.Event()
 
     def stop(self):
@@ -94,26 +102,31 @@ class PullClipThread(threading.Thread):
     def stopped(self):
         return self._stop.isSet()
 
-    def pull_clip_thread_func(self,lock,queue,retry):
+    def pull_clip_thread_func(self,lock,queue,retry,directory):
         import hoverboard
         while True:
             if self.stopped():
                 break
             try:
+                if directory == "global":
+                    last_modified = hoverboard.last_modified
+                else:
+                    last_modified = hoverboard.last_modified_device
                 assert hoverboard.backend is not None and hoverboard.backend.check_validity()
-                #cp = clipboard.Clipboard()
                 with lock:
-                    files = sorted(hoverboard.backend.list_files(), key=lambda x: x.modified)
+                    files = sorted(hoverboard.backend.list_files(directory), key=lambda x: x.modified)
                 if files:
                     filedesc = files[-1]
-                    if filedesc.modified > hoverboard.last_modified:
-                        #hoverboard.actions.set_clipboard_from_cloud(cp,filedesc.path)
+                    if filedesc.modified > last_modified or (hoverboard.last_pulled != directory and retry):
                         path = filedesc.path
                         data = hoverboard.backend.get_file_data(path)
-                        hoverboard.last_modified = filedesc.modified
+                        if directory == "global":
+                            hoverboard.last_modified = filedesc.modified
+                        else:
+                            hoverboard.last_modified_device = filedesc.modified
+                        hoverboard.last_pulled = directory
                         queue.append((data,path))
 
-                    #cp.flush()
             except exceptions.AccessRevokedException:
                 hoverboard.access_revoked = True
                 if not retry:
@@ -121,7 +134,6 @@ class PullClipThread(threading.Thread):
                 time.sleep(.5)
                 continue
             except Exception as e:
-                print e
                 if not retry:
                     break
                 time.sleep(.5)
@@ -158,7 +170,7 @@ def init(args,settings,plugins_dir):
         userconfig = imp.load_source('userconfig', args.config)
         userconfig.init(settings.config)
     else:
-        config.init(max_size=settings.max_size,auto_push=settings.auto_push,auto_pull=settings.auto_pull)
+        config.init(max_size=settings.max_size,auto_push=settings.auto_push,auto_pull_global=settings.auto_pull_global,auto_pull_device=settings.auto_pull_device)
     globals()["plugins"] = plugin.get_plugins(plugins_dir)
     globals()["backends"] = plugins[plugin.BACKEND_PLUGIN]
     globals()["settings"] = settings
@@ -171,5 +183,5 @@ def init(args,settings,plugins_dir):
     globals()["download_list"] = SharedQueue(down_queue_lock)
 
     globals()["backend_lock"] = threading.Lock()
-    globals()["cleanup_thread"] = CleanupThread(None,backend_lock)
+    globals()["cleanup_thread"] = CleanupThread(None,backend_lock,settings.device_name)
     cleanup_thread.start()

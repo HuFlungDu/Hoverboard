@@ -29,11 +29,11 @@ BACKEND_PLUGIN, = plugin_types = xrange(1)
 
 
 class FileDescription(object):
-    def __init__(self,path,modified,size):
+    def __init__(self,path,modified,size,is_dir):
         self.path = path
         self.modified = modified
         self.size = size
-        pass
+        self.is_dir = is_dir
 
 class PluginWindow(object):
     def __init__(self,window):

@@ -5,6 +5,8 @@ import argparse
 import functools
 import sys
 from collections import namedtuple
+import getpass
+import platform
 
 import logging
 
@@ -22,18 +24,20 @@ import traceback
 backend = None
 
 class Settings(object):
-    def __init__(self, backend, connectiondata, max_size=None, auto_push=None, auto_pull=None):
-        self._backend = backend
-        self._connectiondata = connectiondata
+    def __init__(self, backend, connectiondata, 
+                 max_size=None, 
+                 auto_push=None, 
+                 auto_pull_global=None,
+                 auto_pull_device=None,
+                 device_name=None):
         self.xml = ET.Element("Settings")
+        self.backend = self._backend = backend
+        self.connectiondata = self._connectiondata = connectiondata
         self.max_size = self._max_size = 1024*1024 if max_size is None else max_size
         self.auto_push = self._auto_push = True if auto_push is None else auto_push
-        self.auto_pull = self._auto_pull = True if auto_pull is None else auto_pull
-
-
-        self.backend = backend
-        self.connectiondata = connectiondata
-        
+        self.auto_pull_global = self._auto_pull_global = True if auto_pull_global is None else auto_pull_global
+        self.auto_pull_device = self._auto_pull_device = True if auto_pull_device is None else auto_pull_device
+        self.device_name = self._device_name = "" if device_name is None else device_name        
 
     def to_xml(self):
         return self.xml
@@ -95,17 +99,43 @@ class Settings(object):
         self._auto_push = value
 
     @property
-    def auto_pull(self):
-        return self._auto_pull
+    def auto_pull_global(self):
+        return self._auto_pull_global
 
-    @auto_pull.setter
-    def auto_pull(self,value):
+    @auto_pull_global.setter
+    def auto_pull_global(self,value):
         config = self.xml.find("Config")
         if config is None:
             config = ET.Element("Config")
             self.xml.append(config)
-        config.set("auto_pull",str(value))
-        self._auto_pull = value
+        config.set("auto_pull_global",str(value))
+        self._auto_pull_global = value
+
+    @property
+    def auto_pull_device(self):
+        return self._auto_pull_device
+
+    @auto_pull_device.setter
+    def auto_pull_device(self,value):
+        config = self.xml.find("Config")
+        if config is None:
+            config = ET.Element("Config")
+            self.xml.append(config)
+        config.set("auto_pull_device",str(value))
+        self._auto_pull_device = value
+
+    @property
+    def device_name(self):
+        return self._device_name
+
+    @device_name.setter
+    def device_name(self,value):
+        config = self.xml.find("Config")
+        if config is None:
+            config = ET.Element("Config")
+            self.xml.append(config)
+        config.set("device_name",str(value))
+        self._device_name = value
 
     @property
     def config(self):
@@ -129,21 +159,28 @@ class Settings(object):
         else:
             backend = ""
             connectiondata = ET.Element("ConnectionData")
+
         max_size = None
-        auto_pull = None
+        auto_pull_global = None
+        auto_pull_device = None
         auto_push = None
+        device_name = None
         configxml = settingsxml.find("Config")
         if configxml is not None:
             max_size = configxml.get("max_size",None)
             auto_push = configxml.get("auto_push",None)
-            auto_pull = configxml.get("auto_pull",None)
+            auto_pull_global = configxml.get("auto_pull_global",None)
+            auto_pull_device = configxml.get("auto_pull_device",None)
+            device_name = configxml.get("device_name",None)
             if max_size is not None:
                 max_size = int(max_size)
-            if auto_pull is not None:
-                auto_pull = auto_pull == "True"
+            if auto_pull_global is not None:
+                auto_pull_global = auto_pull_global == "True"
+            if auto_pull_device is not None:
+                auto_pull_device = auto_pull_device == "True"
             if auto_push is not None:
                 auto_push = auto_push == "True"
-        return cls(backend,connectiondata,max_size,auto_push,auto_pull)
+        return cls(backend,connectiondata,max_size,auto_push,auto_pull_global,auto_pull_device,device_name)
 
 projectname = "hoverboard"
 if os.name != "posix":
@@ -215,7 +252,7 @@ class InitBackendWindow(wx.Frame):
             raise ValueError("Backend not found")
 
         try:
-            globals()["backend"].create_new()
+            globals()["backend"].create_new(settings.device_name)
             wx.CallAfter(self.Destroy)
             wx.CallAfter(self.app.Exit)
         except Exception as e:
@@ -255,11 +292,17 @@ class SettingsWindow(object):
         self.values["auto_push"] = settings.auto_push
         mainvbox.Add(auto_push_box,0,wx.EXPAND|wx.BOTTOM,15)
 
-        auto_pull_box = wx.CheckBox(panel,-1,"Automatically pull clipboard content from server")
-        auto_pull_box.SetValue(settings.auto_pull)
-        auto_pull_box.Bind(wx.EVT_CHECKBOX,functools.partial(self.on_check_pressed,box=auto_pull_box,property="auto_pull"))
-        self.values["auto_pull"] = settings.auto_pull
-        mainvbox.Add(auto_pull_box,0,wx.EXPAND|wx.BOTTOM,15)
+        auto_pull_global_box = wx.CheckBox(panel,-1,"Automatically pull clipboard content from global pool")
+        auto_pull_global_box.SetValue(settings.auto_pull_global)
+        auto_pull_global_box.Bind(wx.EVT_CHECKBOX,functools.partial(self.on_check_pressed,box=auto_pull_global_box,property="auto_pull_global"))
+        self.values["auto_pull_global"] = settings.auto_pull_global
+        mainvbox.Add(auto_pull_global_box,0,wx.EXPAND|wx.BOTTOM,15)
+
+        auto_pull_device_box = wx.CheckBox(panel,-1,"Automatically pull clipboard content designated for this device")
+        auto_pull_device_box.SetValue(settings.auto_pull_device)
+        auto_pull_device_box.Bind(wx.EVT_CHECKBOX,functools.partial(self.on_check_pressed,box=auto_pull_device_box,property="auto_pull_device"))
+        self.values["auto_pull_device"] = settings.auto_pull_device
+        mainvbox.Add(auto_pull_device_box,0,wx.EXPAND|wx.BOTTOM,15)
 
         label = wx.StaticText(panel,-1,"*Note: These settings are likely ineffectual if you are using the -(-)c(onfig) option")
 
@@ -302,7 +345,8 @@ paused = False
 
 def create_menu_item(menu, label, func):
     item = wx.MenuItem(menu, -1, label)
-    menu.Bind(wx.EVT_MENU, func, id=item.GetId())
+    if func is not None:
+        menu.Bind(wx.EVT_MENU, func, id=item.GetId())
     menu.AppendItem(item)
     return item
 
@@ -337,8 +381,16 @@ class TaskBarIcon(wx.TaskBarIcon):
         create_menu_item(menu, label, self.on_pause)
         if not hoverboard.config.auto_push:
             create_menu_item(menu, "Push clipboard now", self.on_push)
-        if not hoverboard.config.auto_pull:
-            create_menu_item(menu, "Pull clipboard now", self.on_pull)
+        if not hoverboard.config.auto_pull_global:
+            create_menu_item(menu, "Pull clipboard now", functools.partial(self.on_pull,device="global"))
+        if not hoverboard.config.auto_pull_device:
+            create_menu_item(menu, "Pull device clipboard now", functools.partial(self.on_pull,device=hoverboard.settings.device_name))
+        if len(hoverboard.devices):
+            #create_menu_item(menu, "Push to device...", None)
+            submenu = wx.Menu()
+            for device in hoverboard.devices:
+                create_menu_item(submenu, device, functools.partial(self.on_push_to_device,device=device))
+            menu.AppendMenu(wx.ID_ANY,"Push to device...",submenu)
         menu.AppendSeparator()
         create_menu_item(menu, 'Exit Hoverboard', self.on_exit)
         return menu
@@ -360,13 +412,20 @@ class TaskBarIcon(wx.TaskBarIcon):
         clip = clipcatcher.try_catch_clip(cp,backend)
         if clip is not None:
             data, filename = clip
-            hoverboard.upload_list.append((data,filename))
+            hoverboard.upload_list.append((data,filename,"global"))
 
-    def on_pull(self,event):
+    def on_pull(self,event,device):
         if not any([x.is_alive() for x in hoverboard.pull_threads]):
-            pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,True)
+            pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,True,device)
             hoverboard.pull_threads.append(pull_thread)
             pull_thread.start()
+
+    def on_push_to_device(self,event,device):
+        cp = clipboard.Clipboard()
+        clip = clipcatcher.try_catch_clip(cp,backend)
+        if clip is not None:
+            data, filename = clip
+            hoverboard.upload_list.append((data,filename,device))
 
     def on_settings(self,event):
         window = SettingsWindow(self.settings)
@@ -374,7 +433,8 @@ class TaskBarIcon(wx.TaskBarIcon):
         window.Destroy()
         if result == wx.ID_OK:
             hoverboard.settings.max_size = hoverboard.config.max_size = window.values["max_size"]
-            hoverboard.settings.auto_pull = hoverboard.config.auto_pull = window.values["auto_pull"]
+            hoverboard.settings.auto_pull_global = hoverboard.config.auto_pull_global = window.values["auto_pull_global"]
+            hoverboard.settings.auto_pull_device = hoverboard.config.auto_pull_device = window.values["auto_pull_device"]
             hoverboard.settings.auto_push = hoverboard.config.auto_push = window.values["auto_push"]       
 
 
@@ -408,6 +468,37 @@ def main(argv=None):
     app.SetTopWindow(frame)
     icon = TaskBarIcon(frame,app,settings)
     while True:
+        if not hoverboard.settings.device_name:
+            device_name = ""
+            username = getpass.getuser()
+            node = platform.node()
+            if platform.system() == "Linux":
+                if platform.linux_distribution()[0]:
+                    device_name = "{}-{}{}".format(node,platform.inux_distribution()[0].capitalize(),platform.system().capitalize())
+                else:
+                    device_name = "{}-Linux".format(node)
+            elif platform.system() == "Darwin":
+                device_name = "{}-OSx".format(username)
+            elif platform.system() == "Windows":
+                device_name = "{}-{}{}".format(node,platform.system(),platform.release())
+            else:
+                device_name = "{}-{}".format(username,platform.system())
+
+            dlg = wx.TextEntryDialog(None, 'Device name', 'Set device name', 
+                         style=wx.OK|wx.CANCEL)
+            dlg.SetValue(device_name)
+            if dlg.ShowModal() == wx.ID_OK:
+                name = dlg.GetValue()
+                if not name:
+                    return 0
+                hoverboard.settings.device_name = name
+                break
+            else:
+                return 0
+        else:
+            break
+    hoverboard.cleanup_thread.device_name = hoverboard.settings.device_name
+    while True:
         if not hoverboard.settings.backend:
             backend = make_backend(settings,app)
             if backend is None:
@@ -418,7 +509,7 @@ def main(argv=None):
         else:
             try:
                 backend = hoverboard.backends[hoverboard.settings.backend]()
-                backend.resume(hoverboard.settings.connectiondata)
+                backend.resume(hoverboard.settings.connectiondata,settings.device_name)
                 break
             except Exception as e:
                 hoverboard.settings.backend = None
@@ -435,11 +526,16 @@ def main(argv=None):
                     if clip is not None:
                         data, filename = clip
                         hoverboard.upload_list.append((data,filename))
-                if hoverboard.config.auto_pull:
-                    if not any([x.is_alive() for x in hoverboard.pull_threads]):
-                        pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,False)
-                        hoverboard.pull_threads.append(pull_thread)
-                        pull_thread.start()
+                if hoverboard.config.auto_pull_global:
+                    #if not any([x.is_alive() for x in hoverboard.pull_threads]):
+                    pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,False,"global")
+                    hoverboard.pull_threads.append(pull_thread)
+                    pull_thread.start()
+                if hoverboard.config.auto_pull_device:
+                    #if not any([x.is_alive() for x in hoverboard.pull_threads]):
+                    pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,False,hoverboard.settings.device_name)
+                    hoverboard.pull_threads.append(pull_thread)
+                    pull_thread.start()
         except exceptions.AccessRevokedException:
             dialog = wx.MessageDialog(None,"Hoverboard's access for your backend has been revoked.\nWould you like to reauthenticate?",
                                             "Access revoked",wx.YES_NO|wx.ICON_ERROR)
