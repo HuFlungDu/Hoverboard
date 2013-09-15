@@ -12,6 +12,7 @@ Features
 * User scriptable configuration. Do whatever you want, this is Python. The program includes a `-c` or `--config` option that, when pointed at a python module, will import that Python module and run it's `init` function. The normal use case for this would be, in the config file, to `import hoverboard.config` and call `hoverboard.config.init` with your config options (currently the only option is `max_size`), but you have full access to the hoverboard code from here. Duck punch your way to better health.
 * If you don't want to use user scriptable settings, includes in app settings (stored in XML) that are effective unless you are using the -c option.
 * Sync clipboard automatically or on demand, separate for pulling and pushing.
+* Send clipboard to specific device, which can retrieve the clipboard automatically or on demand.
 
 Planned Features
 ----------------
