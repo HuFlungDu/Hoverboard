@@ -252,7 +252,7 @@ class InitBackendWindow(wx.Frame):
             raise ValueError("Backend not found")
 
         try:
-            globals()["backend"].create_new(settings.device_name)
+            globals()["backend"].create_new(hoverboard.settings.device_name)
             wx.CallAfter(self.Destroy)
             wx.CallAfter(self.app.Exit)
         except Exception as e:
@@ -525,7 +525,7 @@ def main(argv=None):
                     clip = clipcatcher.try_catch_clip(cp,backend)
                     if clip is not None:
                         data, filename = clip
-                        hoverboard.upload_list.append((data,filename))
+                        hoverboard.upload_list.append((data,filename,"global"))
                 if hoverboard.config.auto_pull_global:
                     #if not any([x.is_alive() for x in hoverboard.pull_threads]):
                     pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,False,"global")
