@@ -474,7 +474,7 @@ def main(argv=None):
             node = platform.node()
             if platform.system() == "Linux":
                 if platform.linux_distribution()[0]:
-                    device_name = "{}-{}{}".format(node,platform.inux_distribution()[0].capitalize(),platform.system().capitalize())
+                    device_name = "{}-{}{}".format(node,platform.linux_distribution()[0].capitalize(),platform.system().capitalize())
                 else:
                     device_name = "{}-Linux".format(node)
             elif platform.system() == "Darwin":
