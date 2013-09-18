@@ -34,6 +34,11 @@ class FileDescription(object):
         self.modified = modified
         self.size = size
         self.is_dir = is_dir
+class Device(object):
+    def __init__(self,name,modified):
+        self.name = name
+        timedelta = datetime.datetime.utcnow() - modified
+        self.active = (timedelta.days * 86400 + timedelta.seconds)/60 < 20
 
 class PluginWindow(object):
     def __init__(self,window):

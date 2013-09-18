@@ -31,7 +31,16 @@ class Backend(object):
         sess = session.DropboxSession(self._APP_KEY,self._APP_SECRET, self._ACCESS_TYPE )
         sess.set_token(key,secret)
         self.client = client.DropboxClient(sess)
+        self.checkin(device_name)
         assert self.check_validity()
+
+        try:
+            self.client.file_create_folder("devices")
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 403:
+                pass
+            else:
+                raise e
         try:
             self.client.file_create_folder("global")
         except dropboxlib.rest.ErrorResponse as e:
@@ -62,12 +71,21 @@ class Backend(object):
         response = urlwindow.run()
         urlwindow.destroy()
         self.access_token = None
+        self.checkin(device_name)
         if response == plugin.RESPONSE_OK:
             self.access_token = sess.obtain_access_token(request_token)
             self.client = client.DropboxClient(sess)
 
         if not self.access_token:
             raise exceptions.FailedToCreateBackend
+
+        try:
+            self.client.file_create_folder("devices")
+        except dropboxlib.rest.ErrorResponse as e:
+            if e.status == 403:
+                pass
+            else:
+                raise e
 
         try:
             self.client.file_create_folder("global")
@@ -90,7 +108,7 @@ class Backend(object):
             if outpath is None:
                 outpath = os.path.basename(filepath)
             with open(filepath,"rb") as f:
-                self.client.put_file(outpath,f)
+                self.client.put_file(outpath,f,overwrite=True)
         except dropboxlib.rest.ErrorResponse as e:
             if e.status == 401:
                 raise exceptions.AccessRevokedException()
@@ -99,7 +117,7 @@ class Backend(object):
 
     def save_data(self,data,outpath):
         try:
-            self.client.put_file(outpath,data)
+            self.client.put_file(outpath,data,overwrite=True)
         except dropboxlib.rest.ErrorResponse as e:
             if e.status == 401:
                 raise exceptions.AccessRevokedException()
@@ -206,17 +224,10 @@ class Backend(object):
                 return False
 
     def get_devices(self,device_name):
-        directories = self._list_dirs()
-        dirnames = set(x.path.split("/")[1] for x in directories)
-        try:
-            dirnames.remove(device_name)
-        except:
-            pass
-        try:
-            dirnames.remove("global")
-        except:
-            pass
-        return list(dirnames)
+        device_files = self.list_files("devices")
+        devices = [plugin.Device(x.path.split("/")[-1], x.modified) for x in device_files if x.path.split("/")[-1] != device_name]
+        return list(devices)
 
-
+    def checkin(self,device_name):
+        self.save_data("{}".format(datetime.datetime.utcnow()),"devices/{}".format(device_name))
 

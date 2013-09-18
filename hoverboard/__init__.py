@@ -16,6 +16,7 @@ backends = {}
 backend = None
 last_modified = datetime.datetime.min
 last_modified_device = datetime.datetime.min
+last_checkin = datetime.datetime.min
 last_pulled = "global"
 access_revoked = False
 pull_threads = []
@@ -71,7 +72,11 @@ class CleanupThread(threading.Thread):
             try:
                 # Not strictly cleanup, but I don't feel like starting up another thread.
                 hoverboard.devices = hoverboard.backend.get_devices(self.device_name)
-
+                timedelta = datetime.datetime.now() - last_checkin
+                # Check in every tenish minutes
+                if (timedelta.days * 86400 + timedelta.seconds)/60 > 10:
+                    hoverboard.backend.checkin()
+                    last_checkin = datetime.datetime.now()
                 for directory in ("global",self.device_name):
                     if hoverboard.backend is not None and hoverboard.backend.check_validity() and directory:
                         with lock:
