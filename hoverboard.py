@@ -382,7 +382,7 @@ class TaskBarIcon(wx.TaskBarIcon):
         if not hoverboard.config.auto_push:
             create_menu_item(menu, "Push clipboard now", self.on_push)
         if not hoverboard.config.auto_pull_global:
-            create_menu_item(menu, "Pull clipboard now", functools.partial(self.on_pull,device="global"))
+            create_menu_item(menu, "Pull clipboard now", functools.partial(self.on_pull,device=None))
         if not hoverboard.config.auto_pull_device:
             create_menu_item(menu, "Pull device clipboard now", functools.partial(self.on_pull,device=hoverboard.settings.device_name))
         if len(hoverboard.devices):
@@ -412,13 +412,12 @@ class TaskBarIcon(wx.TaskBarIcon):
         clip = clipcatcher.try_catch_clip(cp,backend)
         if clip is not None:
             data, filename = clip
-            hoverboard.upload_list.append((data,filename,"global"))
+            hoverboard.upload_list.append((data,filename,None))
 
     def on_pull(self,event,device):
-        if not any([x.is_alive() for x in hoverboard.pull_threads]):
-            pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,True,device)
-            hoverboard.pull_threads.append(pull_thread)
-            pull_thread.start()
+        pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,True,device)
+        hoverboard.pull_threads.append(pull_thread)
+        pull_thread.start()
 
     def on_push_to_device(self,event,device):
         cp = clipboard.Clipboard()
@@ -525,10 +524,10 @@ def main(argv=None):
                     clip = clipcatcher.try_catch_clip(cp,backend)
                     if clip is not None:
                         data, filename = clip
-                        hoverboard.upload_list.append((data,filename,"global"))
+                        hoverboard.upload_list.append((data,filename,None))
                 if hoverboard.config.auto_pull_global:
                     #if not any([x.is_alive() for x in hoverboard.pull_threads]):
-                    pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,False,"global")
+                    pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,False,None)
                     hoverboard.pull_threads.append(pull_thread)
                     pull_thread.start()
                 if hoverboard.config.auto_pull_device:

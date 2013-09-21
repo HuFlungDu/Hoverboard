@@ -17,7 +17,7 @@ backend = None
 last_modified = datetime.datetime.min
 last_modified_device = datetime.datetime.min
 last_checkin = datetime.datetime.min
-last_pulled = "global"
+last_pulled = None
 access_revoked = False
 pull_threads = []
 devices = []
@@ -35,9 +35,7 @@ class UploadThread(threading.Thread):
 
     def upload_thread_func(self,lock, queue):
         import hoverboard
-        counter = 0
         while True:
-            counter += 1
             if self.stopped():
                 break
             if len(queue):
@@ -45,7 +43,10 @@ class UploadThread(threading.Thread):
                     if hoverboard.backend is not None and hoverboard.backend.check_validity():
                         data, filename, directory = queue.popleft()
                         if len(data) < hoverboard.config.max_size:
-                            backend.save_data(data,"{}/{}".format(directory,filename))
+                            if directory is None:
+                                backend.save_data(data,"global/{}".format(filename))
+                            else:
+                                backend.save_data(data,"device_dirs/{}/{}".format(directory,filename))
                 except exceptions.AccessRevokedException:
                     hoverboard.access_revoked = True
                 except Exception as e:
@@ -71,25 +72,26 @@ class CleanupThread(threading.Thread):
                 break
             try:
                 # Not strictly cleanup, but I don't feel like starting up another thread.
-                hoverboard.devices = hoverboard.backend.get_devices(self.device_name)
-                timedelta = datetime.datetime.now() - last_checkin
-                # Check in every tenish minutes
-                if (timedelta.days * 86400 + timedelta.seconds)/60 > 10:
-                    hoverboard.backend.checkin()
-                    last_checkin = datetime.datetime.now()
-                for directory in ("global",self.device_name):
-                    if hoverboard.backend is not None and hoverboard.backend.check_validity() and directory:
-                        with lock:
-                            files = sorted(hoverboard.backend.list_files(directory), key=lambda x: x.modified)
-                        if files and not hoverboard.access_revoked:
-                            totalsize = sum(x.size for x in files)
-                            while totalsize > config.max_size:
-                                try:
-                                    hoverboard.backend.remove_file(files[0].path)
-                                except:
-                                    pass
-                                files = files[1:]
+                if hoverboard.backend is not None:
+                    hoverboard.devices = hoverboard.backend.get_devices(self.device_name)
+                    timedelta = datetime.datetime.now() - hoverboard.last_checkin
+                    # Check in every tenish minutes
+                    if (timedelta.days * 86400 + timedelta.seconds)/60 > 10:
+                        hoverboard.backend.checkin(hoverboard.settings.device_name)
+                        hoverboard.last_checkin = datetime.datetime.now()
+                    for directory in (None,self.device_name):
+                         if hoverboard.backend.check_validity() and directory:
+                            with lock:
+                                files = sorted(hoverboard.backend.list_files(directory), key=lambda x: x.modified)
+                            if files and not hoverboard.access_revoked:
                                 totalsize = sum(x.size for x in files)
+                                while totalsize > config.max_size:
+                                    try:
+                                        hoverboard.backend.remove_file(files[0].path)
+                                    except:
+                                        pass
+                                    files = files[1:]
+                                    totalsize = sum(x.size for x in files)
             except exceptions.AccessRevokedException:
                 hoverboard.access_revoked = True
             except Exception as e:
@@ -97,7 +99,7 @@ class CleanupThread(threading.Thread):
             time.sleep(.5)
 
 class PullClipThread(threading.Thread):
-    def __init__(self,group,backend_lock,queue,retry=False,directory="global"):
+    def __init__(self,group,backend_lock,queue,retry=False,directory=None):
         threading.Thread.__init__(self,group=group, target=self.pull_clip_thread_func, args=(backend_lock,queue,retry,directory))
         self._stop = threading.Event()
 
@@ -113,7 +115,7 @@ class PullClipThread(threading.Thread):
             if self.stopped():
                 break
             try:
-                if directory == "global":
+                if directory is None:
                     last_modified = hoverboard.last_modified
                 else:
                     last_modified = hoverboard.last_modified_device
@@ -122,10 +124,10 @@ class PullClipThread(threading.Thread):
                     files = sorted(hoverboard.backend.list_files(directory), key=lambda x: x.modified)
                 if files:
                     filedesc = files[-1]
-                    if filedesc.modified > last_modified or (hoverboard.last_pulled != directory and retry):
+                    if filedesc.modified > last_modified or retry:
                         path = filedesc.path
                         data = hoverboard.backend.get_file_data(path)
-                        if directory == "global":
+                        if directory is None:
                             hoverboard.last_modified = filedesc.modified
                         else:
                             hoverboard.last_modified_device = filedesc.modified
@@ -139,6 +141,7 @@ class PullClipThread(threading.Thread):
                 time.sleep(.5)
                 continue
             except Exception as e:
+                logging.error(traceback.format_exc())
                 if not retry:
                     break
                 time.sleep(.5)

@@ -34,27 +34,10 @@ class Backend(object):
         self.checkin(device_name)
         assert self.check_validity()
 
-        try:
-            self.client.file_create_folder("devices")
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 403:
-                pass
-            else:
-                raise e
-        try:
-            self.client.file_create_folder("global")
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 403:
-                pass
-            else:
-                raise e
-        try:
-            self.client.file_create_folder(device_name)
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 403:
-                pass
-            else:
-                raise e
+        self._make_dir("devices",True)
+        self._make_dir("global",True)
+        self._make_dir("device_dirs",True)
+        self._make_dir("device_dirs/{}".format(device_name),True)
 
     def create_new(self,device_name):
         sess = session.DropboxSession(self._APP_KEY, self._APP_SECRET, self._ACCESS_TYPE)
@@ -71,37 +54,25 @@ class Backend(object):
         response = urlwindow.run()
         urlwindow.destroy()
         self.access_token = None
-        self.checkin(device_name)
         if response == plugin.RESPONSE_OK:
             self.access_token = sess.obtain_access_token(request_token)
             self.client = client.DropboxClient(sess)
-
         if not self.access_token:
             raise exceptions.FailedToCreateBackend
+        self.checkin(device_name)
+        self._make_dir("devices",True)
+        self._make_dir("global",True)
+        self._make_dir("device_dirs",True)
+        self._make_dir("device_dirs/{}".format(device_name),True)
 
+    def _make_dir(self,dirpath,ignore_dup=False):
         try:
-            self.client.file_create_folder("devices")
+            self.client.file_create_folder(dirpath)
         except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 403:
+            if e.status == 403 and ignore_dup:
                 pass
             else:
                 raise e
-
-        try:
-            self.client.file_create_folder("global")
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 403:
-                pass
-            else:
-                raise e
-        try:
-            self.client.file_create_folder(device_name)
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 403:
-                pass
-            else:
-                raise e
-
 
     def save_file(self,filepath,outpath=None):
         try:
@@ -169,10 +140,13 @@ class Backend(object):
                 else:
                     self.files[path] = plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"],filedata["is_dir"])
 
-    def list_files(self,directory):
+    def list_files(self,device_name=None):
         try:
             self._refresh_files()
-            return [x for x in self.files.values() if x.path.startswith("/{}/".format(directory))]
+            if device_name is None:
+                return [x for x in self.files.values() if x.path.startswith("/global/")]
+            else:
+                return [x for x in self.files.values() if x.path.startswith("/device_dirs/{}/".format(device_name))]
         except dropboxlib.rest.ErrorResponse as e:
             if e.status == 401:
                 raise exceptions.AccessRevokedException()
@@ -224,9 +198,10 @@ class Backend(object):
                 return False
 
     def get_devices(self,device_name):
-        device_files = self.list_files("devices")
-        devices = [plugin.Device(x.path.split("/")[-1], x.modified) for x in device_files if x.path.split("/")[-1] != device_name]
-        return list(devices)
+        self._refresh_files()
+        return [x.path.split("/")[-1] for x in self.files.values() if x.path.startswith("/devices/".format(device_name)) and x.path.split("/")[-1] != device_name]
+        #devices = [plugin.Device(x.path.split("/")[-1], x.modified) for x in device_files ]
+        #return list(devices)
 
     def checkin(self,device_name):
         self.save_data("{}".format(datetime.datetime.utcnow()),"devices/{}".format(device_name))
