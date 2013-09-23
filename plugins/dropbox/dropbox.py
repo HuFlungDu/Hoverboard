@@ -199,7 +199,7 @@ class Backend(object):
 
     def get_devices(self,device_name):
         self._refresh_files()
-        return [x.path.split("/")[-1] for x in self.files.values() if x.path.startswith("/devices/".format(device_name)) and x.path.split("/")[-1] != device_name]
+        return [x.path.split("/")[-1] for x in self.files.values() if x.path.startswith("/devices/") and x.path.split("/")[-1] != device_name]
         #devices = [plugin.Device(x.path.split("/")[-1], x.modified) for x in device_files ]
         #return list(devices)
 
