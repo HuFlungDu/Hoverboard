@@ -41,12 +41,12 @@ class UploadThread(threading.Thread):
             if len(queue):
                 try:
                     if hoverboard.backend is not None and hoverboard.backend.check_validity():
-                        data, filename, directory = queue.popleft()
+                        data, format, device = queue.popleft()
                         if len(data) < hoverboard.config.max_size:
-                            if directory is None:
-                                backend.save_data(data,"global/{}".format(filename))
+                            if device is None:
+                                backend.push_clip(data,format)
                             else:
-                                backend.save_data(data,"device_dirs/{}/{}".format(directory,filename))
+                                backend.push_clip(data,format,device)
                 except exceptions.AccessRevokedException:
                     hoverboard.access_revoked = True
                 except Exception as e:
@@ -71,23 +71,23 @@ class CleanupThread(threading.Thread):
             if self.stopped():
                 break
             try:
-                # Not strictly cleanup, but I don't feel like starting up another thread.
                 if hoverboard.backend is not None:
+                    # Not strictly cleanup, but I don't feel like starting up another thread.
                     hoverboard.devices = hoverboard.backend.get_devices(self.device_name)
                     timedelta = datetime.datetime.now() - hoverboard.last_checkin
                     # Check in every tenish minutes
                     if (timedelta.days * 86400 + timedelta.seconds)/60 > 10:
                         hoverboard.backend.checkin(hoverboard.settings.device_name)
                         hoverboard.last_checkin = datetime.datetime.now()
-                    for directory in (None,self.device_name):
-                         if hoverboard.backend.check_validity() and directory:
+                    for device in (None,self.device_name):
+                        if hoverboard.backend.check_validity():
                             with lock:
-                                files = sorted(hoverboard.backend.list_files(directory), key=lambda x: x.modified)
+                                files = sorted(hoverboard.backend.list_clips(device), key=lambda x: x.modified)
                             if files and not hoverboard.access_revoked:
                                 totalsize = sum(x.size for x in files)
                                 while totalsize > config.max_size:
                                     try:
-                                        hoverboard.backend.remove_file(files[0].path)
+                                        hoverboard.backend.remove_clip(files[0])
                                     except:
                                         pass
                                     files = files[1:]
@@ -99,8 +99,8 @@ class CleanupThread(threading.Thread):
             time.sleep(.5)
 
 class PullClipThread(threading.Thread):
-    def __init__(self,group,backend_lock,queue,retry=False,directory=None):
-        threading.Thread.__init__(self,group=group, target=self.pull_clip_thread_func, args=(backend_lock,queue,retry,directory))
+    def __init__(self,group,backend_lock,queue,retry=False,device=None):
+        threading.Thread.__init__(self,group=group, target=self.pull_clip_thread_func, args=(backend_lock,queue,retry,device))
         self._stop = threading.Event()
 
     def stop(self):
@@ -109,30 +109,30 @@ class PullClipThread(threading.Thread):
     def stopped(self):
         return self._stop.isSet()
 
-    def pull_clip_thread_func(self,lock,queue,retry,directory):
+    def pull_clip_thread_func(self,lock,queue,retry,device):
         import hoverboard
         while True:
             if self.stopped():
                 break
             try:
-                if directory is None:
+                if device is None:
                     last_modified = hoverboard.last_modified
                 else:
                     last_modified = hoverboard.last_modified_device
                 assert hoverboard.backend is not None and hoverboard.backend.check_validity()
                 with lock:
-                    files = sorted(hoverboard.backend.list_files(directory), key=lambda x: x.modified)
+                    files = sorted(hoverboard.backend.list_clips(device), key=lambda x: x.modified)
                 if files:
                     filedesc = files[-1]
                     if filedesc.modified > last_modified or retry:
                         path = filedesc.path
-                        data = hoverboard.backend.get_file_data(path)
-                        if directory is None:
+                        data = hoverboard.backend.pull_clip(filedesc)
+                        if device is None:
                             hoverboard.last_modified = filedesc.modified
                         else:
                             hoverboard.last_modified_device = filedesc.modified
-                        hoverboard.last_pulled = directory
-                        queue.append((data,path))
+                        hoverboard.last_pulled = device
+                        queue.append((data,filedesc))
 
             except exceptions.AccessRevokedException:
                 hoverboard.access_revoked = True

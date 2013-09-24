@@ -343,10 +343,12 @@ class SettingsWindow(object):
 
 paused = False
 
-def create_menu_item(menu, label, func):
+def create_menu_item(menu, label, func, bitmap=None):
     item = wx.MenuItem(menu, -1, label)
     if func is not None:
         menu.Bind(wx.EVT_MENU, func, id=item.GetId())
+    if bitmap is not None:
+        item.SetBitmap(bitmap)
     menu.AppendItem(item)
     return item
 
@@ -380,24 +382,23 @@ class TaskBarIcon(wx.TaskBarIcon):
         create_menu_item(menu, "Settings", self.on_settings)
         create_menu_item(menu, label, self.on_pause)
         if not hoverboard.config.auto_push:
-            create_menu_item(menu, "Push clipboard now", self.on_push)
+            create_menu_item(menu, "Push clipboard now", functools.partial(self.on_push,device=None))
         if not hoverboard.config.auto_pull_global:
             create_menu_item(menu, "Pull clipboard now", functools.partial(self.on_pull,device=None))
         if not hoverboard.config.auto_pull_device:
             create_menu_item(menu, "Pull device clipboard now", functools.partial(self.on_pull,device=hoverboard.settings.device_name))
         if len(hoverboard.devices):
-            #create_menu_item(menu, "Push to device...", None)
             submenu = wx.Menu()
             for device in hoverboard.devices:
-                create_menu_item(submenu, device, functools.partial(self.on_push_to_device,device=device))
+                if device.active:
+                    bitmap = icon.getDeviceConnectedBitmap()
+                else:
+                    bitmap = icon.getDeviceNotConnectedBitmap()
+                item = create_menu_item(submenu, device.name, functools.partial(self.on_push,device=device), bitmap)
             menu.AppendMenu(wx.ID_ANY,"Push to device...",submenu)
         menu.AppendSeparator()
         create_menu_item(menu, 'Exit Hoverboard', self.on_exit)
         return menu
-
-    def set_icon(self, path):
-        icon = wx.IconFromBitmap(wx.Bitmap(path))
-        self.SetIcon(icon, "Hoverboard")
 
     def on_pause(self, event):
         global paused
@@ -407,24 +408,17 @@ class TaskBarIcon(wx.TaskBarIcon):
         else:
             self.SetIcon(icon.getTrayIconIcon(),"Hoverboard")
 
-    def on_push(self,event):
+    def on_push(self,event,device):
         cp = clipboard.Clipboard()
-        clip = clipcatcher.try_catch_clip(cp,backend)
+        clip = clipcatcher.try_catch_clip(cp,True)
         if clip is not None:
-            data, filename = clip
-            hoverboard.upload_list.append((data,filename,None))
+            data, format = clip
+            hoverboard.upload_list.append((data,format,device))
 
     def on_pull(self,event,device):
         pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,True,device)
         hoverboard.pull_threads.append(pull_thread)
         pull_thread.start()
-
-    def on_push_to_device(self,event,device):
-        cp = clipboard.Clipboard()
-        clip = clipcatcher.try_catch_clip(cp,backend)
-        if clip is not None:
-            data, filename = clip
-            hoverboard.upload_list.append((data,filename,device))
 
     def on_settings(self,event):
         window = SettingsWindow(self.settings)
@@ -521,17 +515,15 @@ def main(argv=None):
                 files = None
                 if hoverboard.config.auto_push:
                     cp = clipboard.Clipboard()
-                    clip = clipcatcher.try_catch_clip(cp,backend)
+                    clip = clipcatcher.try_catch_clip(cp)
                     if clip is not None:
-                        data, filename = clip
-                        hoverboard.upload_list.append((data,filename,None))
+                        data, format = clip
+                        hoverboard.upload_list.append((data,format,None))
                 if hoverboard.config.auto_pull_global:
-                    #if not any([x.is_alive() for x in hoverboard.pull_threads]):
                     pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,False,None)
                     hoverboard.pull_threads.append(pull_thread)
                     pull_thread.start()
                 if hoverboard.config.auto_pull_device:
-                    #if not any([x.is_alive() for x in hoverboard.pull_threads]):
                     pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,False,hoverboard.settings.device_name)
                     hoverboard.pull_threads.append(pull_thread)
                     pull_thread.start()
@@ -556,9 +548,9 @@ def main(argv=None):
         if len(hoverboard.download_list):
             if hoverboard.backend is not None and hoverboard.backend.check_validity():
                 cp = clipboard.Clipboard()
-                data, filename = hoverboard.download_list.popleft()
+                data, filedata = hoverboard.download_list.popleft()
                 try:
-                    hoverboard.actions.set_clipboard_from_cloud(cp,data,filename)
+                    hoverboard.actions.set_clipboard_from_cloud(cp,data,filedata)
                 except exceptions.AccessRevokedException:
                     hoverboard.access_revoked = True
                 except Exception as e:

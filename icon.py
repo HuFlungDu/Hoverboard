@@ -31,3 +31,53 @@ getTrayIconPausedImage = TrayIconPaused.GetImage
 getTrayIconPausedBitmap = TrayIconPaused.GetBitmap
 getTrayIconPausedIcon = TrayIconPaused.GetIcon
 
+#----------------------------------------------------------------------
+DeviceConnected = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAABHNCSVQICAgIfAhkiAAAAAlw"
+    "SFlzAAAN1wAADdcBQiibeAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoA"
+    "AAORSURBVDiNrZRNbxxFEIaf6u6Z2V3ba69wYgFGwoplxyASBSkCCREZLARS4F9EPiB+BHfu"
+    "HKwc+A+QEzgkkRASCbEIhNiJQ5AP/lzvh/dzdme6OMyucRJyo6U6dfXTVe9b3aKq/J/LvWjj"
+    "7StyCcySdbqoqVwAEKtraSI3wK/evaq3/uucPFvhuc+lFCWyMlaY+HT+7IKbnDztJidOAVCu"
+    "HVAu7ycb6w+SRrv2Xex0+d7XWn0h8OIVeQ9jv33zjbcK589diFQ8o9EEIgYA7z3NXhWjlt/u"
+    "rcX3//y9jU8/u31Vf3oOmFVmH3/4wUelkVJIYCPywShePYrCIE9Ruv0mXj2tao/rP35fjV16"
+    "ZlipGZKjRFbm5ucLYdFz0Nwi8T2Ouoc04wqN7iGNuEIjPqTRPaSXdtk9+ouw6Jmbny9EiawM"
+    "OWZoQCE3enluYTZ6eHCHwEU0+xXaaYVWWqXja3R8jVZao5lUafYqGGN5eHCHuYXZqJAbvZyZ"
+    "eOyyWZqemQ4Ou1v0aRHrEak6QEEUBDJpFI/i8ST06GmLcnuL6Znp4MH9jSXglgOwTheLpRHX"
+    "0TJBztCiTCQRYkDFI5naeK94o3hVesQEkdDRKsXSpLNOF48r1FQujE3k2EsbuEjwtk1sOogR"
+    "jIGMmPmiHrwoguLE0NcmpfHXGM6qY5DvTR9rBYzBOsE6QWwGFBF0QPQp+FRJrSJGMR48/eGd"
+    "Aw2trNXr9Uu5qRwxMTbMoMYJxmZAAPWawRIQAyIQaZ76fg2srB27nCZ6o1o56kdhDhsYbCC4"
+    "UAgiIYgMQe7fcJHBhSbLc0IU5qhVGv000Rsn5tCv7jyqJI6IwAVZy4FgwwwS5gew0OACGUgC"
+    "QRDiCNnZrCTgV4+Bd6/qrV4SX9v4ZadbCCcQITPEZoddZAii7BKxgpgsRoJxNm7vdntJfG34"
+    "WRy/lNjo8vZmvbP3uEnOFjFY8Ir3mQk+zTREwYghb4rsPmmxs1nvxkaXn3vLIlKY+4SPx6bt"
+    "N1OzhdzZxYnQFlLEKYgfKGPwiZC2Les3a/39zXa38ij94slNfgDKqto7CRwHJkdeYebMonyZ"
+    "L9qLUws5W3w5tMXTAQBH+32Otnt+b72btqrp2uPr+lXngL+BMrD9FHAALQKTQOnVd3h/5JR5"
+    "N/8S553jdYCkz1a7rH809/T2zq/8DNSBA2BPVZOnWj65RMQC+RMRDeY/AbqDaAOxPgP4B2ab"
+    "ynazR0WaAAAAAElFTkSuQmCC")
+getDeviceConnectedData = DeviceConnected.GetData
+getDeviceConnectedImage = DeviceConnected.GetImage
+getDeviceConnectedBitmap = DeviceConnected.GetBitmap
+
+#----------------------------------------------------------------------
+DeviceNotConnected = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAABHNCSVQICAgIfAhkiAAAAAlw"
+    "SFlzAAAN1wAADdcBQiibeAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoA"
+    "AAM1SURBVDiNrZTPaxtHFMc/M7uzs7KobckyDjQxtoPbnlJyMBRKgsGFHkwvvfbuU/+BQCil"
+    "BHrof+BT7zmV4lsNxqUUXBo1tIdSsCy3uI7jrKSVJUveX68H7QpHSW4d+O6PeW8/vJn3nVUi"
+    "wv853DcFHip1X8OGA+sp3AVwoJ7CXga7j0T2X/edmqzwgVIVC9teqbS5tLxsZqtV9625OQAu"
+    "goBOu500G404Ggx2rmDra5H2G4FfKPUh8P3KysrUe3fuWA14c3NoYxARsjgmbrXIlOLPp0+v"
+    "Go3GJfDJVyI/vQJ8oFTFwOHa2lqlVqmgSyXM9PQoSwQRgVxxGCJpStBuc3Bw0I7hdlGpLsgW"
+    "tpdu3ZqqlssMTk6QJCFqtYiC4BVlcczl0RGVcpmlxcUpC9sFRxcNMNZurq6u2rBex7GWtNUi"
+    "DQIkCMiKe6tF2mqRBAHKdQmfPOGd1VVrrN18qNT9cZc1bLy9sGCS01MIQ3QYohwHnS9RFfss"
+    "QiaCZBk6SZAwJDo95eaNG+bw+HgD2HdzO6zPlkqu6nSwgDo7Q/s+OstQ14CZCGTZiB1Fo9xO"
+    "h5npadeB9XGFGdyd9X2ckxNcwO31cPp9HBEUoPL9kVEuaT6ngKzbZWZhgcKrY2PrJMGIoPNJ"
+    "VwQn3+TrwDRXkscyEaI4Hufo/FLvXVzg+T7eqONYwM9Vuvbs5zEPMIDn+/S6XTTUx8AU9tq9"
+    "Xmw8D7dIfA20ABUwAxhr6fT7cQp7Y2AGu81uN8FaXGtx8mWbCWgBdAv5PuL7NMMwyWB3DHwk"
+    "sh8nyc6v5+dDU62ilcIZdR93AqQLKYVbrfLb8+fDOEl2ip/F+KRcwdZRvz9oDgboWg2MQSYa"
+    "keXvGIOen+d4MKDR6w2vYKvgjM+yUmrqM/h4Bb69ba1/r1z2SlGEmyQjEwPiusTGMPA8fuz3"
+    "48PhcPg7fP4d/AC8EJHoOnAGqC3C8qfwZVWptXc9z1nQ2qm5I3cFacppmmZ/RVF6LlJ/DN88"
+    "gybwAvj3JWAOnQZqQOUjuHcTPpiH931YAhjC38/gj3/glz34GQiBc+BMRJKXlnx9KKWc3CmF"
+    "LCN/JyMuQ+ASuJIJwH8C25TmkHULEgAAAABJRU5ErkJggg==")
+getDeviceNotConnectedData = DeviceNotConnected.GetData
+getDeviceNotConnectedImage = DeviceNotConnected.GetImage
+getDeviceNotConnectedBitmap = DeviceNotConnected.GetBitmap
+

@@ -74,7 +74,7 @@ class Backend(object):
             else:
                 raise e
 
-    def save_file(self,filepath,outpath=None):
+    def _save_file(self,filepath,outpath=None):
         try:
             if outpath is None:
                 outpath = os.path.basename(filepath)
@@ -86,7 +86,7 @@ class Backend(object):
             else:
                 raise e
 
-    def save_data(self,data,outpath):
+    def _save_data(self,data,outpath):
         try:
             self.client.put_file(outpath,data,overwrite=True)
         except dropboxlib.rest.ErrorResponse as e:
@@ -95,16 +95,25 @@ class Backend(object):
             else:
                 raise e
 
-    def remove_file(self,filename):
+    def push_clip(self,data,format="txt",device=None):
+        now = datetime.datetime.utcnow()
+        filename = str(now)
+        if device is not None:
+            path = "/device_dirs/{}/{}.{}".format(device,filename,format)
+        else:
+            path = "/global/{}.{}".format(filename,format)
+        self._save_data(data,path)
+
+    def remove_clip(self,filedata):
         try:
-            self.client.file_delete(filename)
+            self.client.file_delete(filedata.path)
         except dropboxlib.rest.ErrorResponse as e:
             if e.status == 401:
                 raise exceptions.AccessRevokedException()
             else:
                 raise e
 
-    def get_file(self,filename,path):
+    def _get_file(self,filename,path):
         try:
             hfile = self.client.get_file(filename)
             data = hfile.read()
@@ -115,7 +124,7 @@ class Backend(object):
             else:
                 raise e
 
-    def get_file_data(self,filename):
+    def _get_file_data(self,filename):
         try:
             hfile = self.client.get_file(filename)
             data = hfile.read()
@@ -125,6 +134,9 @@ class Backend(object):
                 raise exceptions.AccessRevokedException()
             else:
                 raise e
+
+    def pull_clip(self,filedata):
+        return self._get_file_data(filedata.path)
 
     def _refresh_files(self):
         has_more = True
@@ -140,7 +152,7 @@ class Backend(object):
                 else:
                     self.files[path] = plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"],filedata["is_dir"])
 
-    def list_files(self,device_name=None):
+    def list_clips(self,device_name=None):
         try:
             self._refresh_files()
             if device_name is None:
@@ -167,7 +179,7 @@ class Backend(object):
             else:
                 raise e
 
-    def get_latest_file(self,path):
+    def _get_latest_file(self,path):
         try:
             filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
             return self.get_file(filename,path)
@@ -177,7 +189,7 @@ class Backend(object):
             else:
                 raise e
 
-    def get_latest_file_data(self):
+    def _get_latest_file_data(self):
         try:
             filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
             return self.get_file_data(filename)
@@ -199,10 +211,10 @@ class Backend(object):
 
     def get_devices(self,device_name):
         self._refresh_files()
-        return [x.path.split("/")[-1] for x in self.files.values() if x.path.startswith("/devices/") and x.path.split("/")[-1] != device_name]
+        return [plugin.Device(x.path.split("/")[-1],x.modified) for x in sorted(self.files.values(),key=lambda x: x.modified,reverse=True) if x.path.startswith("/devices/") and x.path.split("/")[-1] != device_name]
         #devices = [plugin.Device(x.path.split("/")[-1], x.modified) for x in device_files ]
         #return list(devices)
 
     def checkin(self,device_name):
-        self.save_data("{}".format(datetime.datetime.utcnow()),"devices/{}".format(device_name))
+        self._save_data("{}".format(datetime.datetime.utcnow()),"devices/{}".format(device_name))
 

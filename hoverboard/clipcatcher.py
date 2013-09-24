@@ -7,27 +7,19 @@ from hoverboard import clipboard
 
 content = None
 
-
-def waitfor_clip_content(cp):
-    while True:
-        content = get_clip_content(cp)
-        if content:
-            return content
-        time.sleep(1)
-
-def get_clip_content(cp):
+def get_clip_content(cp, force=False):
     global content
     if cp.open():
         available = cp.get_available()
         if available == clipboard.CP_TEXT:
             newcontent = cp.get_data()
-            if newcontent != content:
+            if newcontent != content or force:
                 content = newcontent
                 cp.close()
                 return content
         elif available == clipboard.CP_IMAGE:
             image = cp.get_data()
-            if isinstance(content,clipboard.Image) and content != image: #(content.GetData() != image.GetData()):
+            if isinstance(content,clipboard.Image) and content != image or force: #(content.GetData() != image.GetData()):
                 content = image
                 cp.close()
                 return content
@@ -42,43 +34,10 @@ def get_clip_content(cp):
         cp.close()
         return None
 
-
-def catch_clip(cp,backend):
-    content = waitfor_clip_content(cp)
-    now = datetime.datetime.utcnow()
-    filename = str(now)
-    if isinstance(content,gtk.gdk.Pixbuf):
-        filename += ".png"
-        tmpfile, tmppath = tempfile.mkstemp()
-        os.fdopen(tmpfile,"wb").close()
-        content.save(tmppath,"png")
-        with open(tmppath,"rb") as pngfile:
-            data = pngfile.read()
-        os.remove(tmppath)
-        if len(data) < hoverboard.config.max_size:
-            backend.save_data(data,filename)
-        
-    elif isinstance(content,(str,unicode)):
-        filename += ".txt"
-        if len(content) < hoverboard.config.max_size:
-            backend.save_data(content,filename)
-
-def try_catch_clip(cp,backend):
-    content = get_clip_content(cp)
-    now = datetime.datetime.utcnow()
-    filename = str(now)
+def try_catch_clip(cp, force=False):
+    content = get_clip_content(cp, force)
     if isinstance(content,clipboard.Image):
-        filename += ".png"
-        data = content.get_data()
-        # if len(data) < hoverboard.config.max_size:
-        #     backend.save_data(data,filename)
-        return data, filename
-        # return True
+        return content, "png"
         
     elif isinstance(content,(str,unicode)):
-        filename += ".txt"
-        # if len(content) < hoverboard.config.max_size:
-        #     backend.save_data(content,filename)
-        return content, filename
-        # return True
-    # return False
+        return content, "txt"

@@ -4,6 +4,7 @@ import imp
 import functools
 import collections
 import logging
+import datetime
 
 #Only one control so far because this is the only one I need. Kind of defeats the purpose of a plugin system, but there you go.
 LINK_CONTROL,TEXTINPUT_CONTROL = xrange(2)
@@ -37,8 +38,15 @@ class FileDescription(object):
 class Device(object):
     def __init__(self,name,modified):
         self.name = name
-        timedelta = datetime.datetime.utcnow() - modified
-        self.active = (timedelta.days * 86400 + timedelta.seconds)/60 < 20
+        self.modified = modified
+
+    def active():
+        doc = "Whether device is currently active"
+        def fget(self):
+            timedelta = datetime.datetime.utcnow() - self.modified
+            return (timedelta.days * 86400 + timedelta.seconds)/60 < 20
+        return locals()
+    active = property(**active())
 
 class PluginWindow(object):
     def __init__(self,window):
