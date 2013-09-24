@@ -212,8 +212,6 @@ class Backend(object):
     def get_devices(self,device_name):
         self._refresh_files()
         return [plugin.Device(x.path.split("/")[-1],x.modified) for x in sorted(self.files.values(),key=lambda x: x.modified,reverse=True) if x.path.startswith("/devices/") and x.path.split("/")[-1] != device_name]
-        #devices = [plugin.Device(x.path.split("/")[-1], x.modified) for x in device_files ]
-        #return list(devices)
 
     def checkin(self,device_name):
         self._save_data("{}".format(datetime.datetime.utcnow()),"devices/{}".format(device_name))

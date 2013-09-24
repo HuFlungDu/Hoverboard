@@ -74,7 +74,7 @@ class CleanupThread(threading.Thread):
                 if hoverboard.backend is not None:
                     timedelta = datetime.datetime.now() - hoverboard.last_checkin
                     # Not strictly cleanup, but I don't feel like starting up another thread.
-                    # Check for devices every 2 minutes
+                    # Check for devices every twoish minutes
                     if (timedelta.days * 86400 + timedelta.seconds)/60 > 2:
                         hoverboard.devices = hoverboard.backend.get_devices(self.device_name)
                     
