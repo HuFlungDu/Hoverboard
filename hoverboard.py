@@ -413,7 +413,7 @@ class TaskBarIcon(wx.TaskBarIcon):
         clip = clipcatcher.try_catch_clip(cp,True)
         if clip is not None:
             data, format = clip
-            hoverboard.upload_list.append((data,format,device))
+            hoverboard.upload_list.append((data,format,device.name if device is not None else device))
 
     def on_pull(self,event,device):
         pull_thread = hoverboard.PullClipThread(None,hoverboard.backend_lock,hoverboard.download_list,True,device)
