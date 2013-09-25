@@ -21,9 +21,8 @@ class Backend(object):
 
     _CLIENT_ID = '701115588883.apps.googleusercontent.com'
     _CLIENT_SECRET = '-xEtLYa8E7xR_gBcB86jX1am'
-    _OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive'
+    _OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
 
-    # _ACCESS_TYPE = 'app_folder'
     _REDIRECT_URI="urn:ietf:wg:oauth:2.0:oob"
 
     def __init__(self):
