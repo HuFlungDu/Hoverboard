@@ -76,7 +76,7 @@ class CleanupThread(threading.Thread):
                     # Not strictly cleanup, but I don't feel like starting up another thread.
                     # Check for devices every twoish minutes
                     if (timedelta.days * 86400 + timedelta.seconds)/60 > 2:
-                        hoverboard.devices = hoverboard.backend.get_devices(self.device_name)
+                        hoverboard.devices = sorted(hoverboard.backend.get_devices(self.device_name), key=lambda x: x.last_checkin,reverse=True)
                     
                     # Check in every tenish minutes
                     if (timedelta.days * 86400 + timedelta.seconds)/60 > 10:

@@ -36,14 +36,14 @@ class FileDescription(object):
         self.size = size
         self.is_dir = is_dir
 class Device(object):
-    def __init__(self,name,modified):
+    def __init__(self,name,last_checkin):
         self.name = name
-        self.modified = modified
+        self.last_checkin = last_checkin
 
     def active():
         doc = "Whether device is currently active"
         def fget(self):
-            timedelta = datetime.datetime.utcnow() - self.modified
+            timedelta = datetime.datetime.utcnow() - self.last_checkin
             return (timedelta.days * 86400 + timedelta.seconds)/60 < 20
         return locals()
     active = property(**active())
