@@ -136,7 +136,7 @@ class Backend(object):
                 raise e
 
     def pull_clip(self,filedata):
-        return self._get_file_data(filedata.path)
+        return self._get_file_data(filedata.extra_data["path"])
 
     def _refresh_files(self):
         has_more = True
@@ -150,15 +150,21 @@ class Backend(object):
                     except:
                         pass
                 else:
-                    self.files[path] = plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"],filedata["is_dir"])
+                    self.files[path] = plugin.FileDescription(filedata["path"].split("/")[-1],filedata["path"].split(".")[-1],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"],filedata["is_dir"],{"path":filedata["path"]})
 
-    def list_clips(self,device_name=None):
+    def list_clips(self,device_name=None,formats = None):
         try:
             self._refresh_files()
             if device_name is None:
-                return [x for x in self.files.values() if x.path.startswith("/global/")]
+                retfiles = [x for x in self.files.values() if x.extra_data["path"].startswith("/global/")]
+                if formats != None:
+                    retfiles = [x for x in refiles if x.format in formats]
+                return retfiles
             else:
-                return [x for x in self.files.values() if x.path.startswith("/device_dirs/{}/".format(device_name))]
+                retfiles = [x for x in self.files.values() if x.extra_data["path"].startswith("/device_dirs/{}/".format(device_name))]
+                if formats != None:
+                    retfiles = [x for x in refiles if x.format in formats]
+                return retfiles
         except dropboxlib.rest.ErrorResponse as e:
             if e.status == 401:
                 raise exceptions.AccessRevokedException()
@@ -173,26 +179,6 @@ class Backend(object):
         try:
             data = {"key":self.access_token.key,"secret":self.access_token.secret}
             return data
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                raise e
-
-    def _get_latest_file(self,path):
-        try:
-            filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
-            return self.get_file(filename,path)
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                raise e
-
-    def _get_latest_file_data(self):
-        try:
-            filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
-            return self.get_file_data(filename)
         except dropboxlib.rest.ErrorResponse as e:
             if e.status == 401:
                 raise exceptions.AccessRevokedException()

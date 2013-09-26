@@ -1,3 +1,6 @@
+class ConnectivityException(Exception):
+    pass
+
 class BackendNotFoundError(Exception):
     pass
 

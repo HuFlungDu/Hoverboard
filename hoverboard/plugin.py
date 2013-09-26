@@ -30,11 +30,14 @@ BACKEND_PLUGIN, = plugin_types = xrange(1)
 
 
 class FileDescription(object):
-    def __init__(self,path,modified,size,is_dir):
-        self.path = path
+    def __init__(self,name,format,modified,size,is_dir,extra_data=None):
+        self.name = name
+        self.format = format
         self.modified = modified
         self.size = size
         self.is_dir = is_dir
+        self.extra_data = extra_data
+
 class Device(object):
     def __init__(self,name,last_checkin):
         self.name = name

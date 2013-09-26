@@ -7,9 +7,10 @@ import json
 import httplib2
 
 import oauth2client
+import apiclient
 from apiclient.discovery import build
-from apiclient.http import MediaFileUpload
 from oauth2client.client import OAuth2WebServerFlow
+import StringIO
 
 plugin_name = "Google Drive"
 plugin_type = plugin.BACKEND_PLUGIN
@@ -25,6 +26,9 @@ class Backend(object):
 
     _REDIRECT_URI="urn:ietf:wg:oauth:2.0:oob"
 
+    _format_mimetypes = {"txt":"text/plain",
+                         "png":"image/png"}
+
     def __init__(self):
         self.drive_service = None
         self.credentials = None
@@ -32,14 +36,17 @@ class Backend(object):
         self._devices_dir = None
         self._global_dir = None
         self._device_dirs_dir = None
+        self._device_dir = None
 
-    def resume(self, init_data):
+    def resume(self, init_data,device_name):
         json_data = init_data.get("json")
         self.credentials = oauth2client.client.Credentials.new_from_json(json_data)
         http = httplib2.Http()
         http = self.credentials.authorize(http)
         self.drive_service = build('drive', 'v2', http=http)
         assert self.check_validity()
+        self._identify_directories(device_name)
+        self._make_initial_directories(device_name)
         # self._devices_dir = self._make_dir("devices",self._hoverboard_dir)
         # self._global_dir = self._make_dir("global",self._hoverboard_dir)
         # self._device_dirs_dir = self._make_dir("device_dirs",self._hoverboard_dir)
@@ -79,6 +86,7 @@ class Backend(object):
             raise exceptions.FailedToCreateBackend
 
         self._identify_directories(device_name)
+        self._make_initial_directories(device_name)
 
         # self._make_dir("hoverboard",True)
         # self._make_dir("hoverboard/devices",True)
@@ -91,7 +99,9 @@ class Backend(object):
         # self.access_token = sess.obtain_access_token(request_token)
 
     def _identify_directories(self,device_name):
-        files = self.drive_service.files().list(q="'appdata' in parents and mimeType = 'application/vnd.google-apps.folder' and (title = 'devices' or title = 'global' or title = 'device_dirs')").execute()
+        appdata_folder = self.drive_service.files().get(fileId='appdata').execute()
+        self._app_folder_dir = appdata_folder['id']
+        files = self.drive_service.files().list(q="'{}' in parents and mimeType = 'application/vnd.google-apps.folder' and (title = 'devices' or title = 'global' or title = 'device_dirs')".format(self._app_folder_dir),fields="items(title,id)").execute()
         devices = [__ for __ in files["items"] if __["title"] == "devices"]
         if len(devices):
             self._devices_dir = devices[0]["id"]
@@ -102,61 +112,50 @@ class Backend(object):
         if len(device_dirs):
             self._device_dirs_dir = device_dirs[0]["id"]
         if self._device_dirs_dir is not None:
-            files = self.drive_service.children().list(q="'mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device_name),folderId=self._device_dirs_dir).execute()
+            files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device_name),folderId=self._device_dirs_dir).execute()
             if len(files["items"]):
-                self._device_dirs_dir = files[0]["id"]
+                self._device_dirs_dir = files["items"][0]["id"]
 
-    def _make_dir(self,name,parent=None):
-            body = {
-                'title': name,
+    def _make_initial_directories(self,device_name):
+        if self._devices_dir is None:
+            devices_dir = self.drive_service.files().insert(body={"title":"devices","parents":[{"id":self._app_folder_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
+            self._devices_dir = devices_dir["id"]
+        if self._global_dir is None:
+            global_dir = self.drive_service.files().insert(body={"title":"global","parents":[{"id":self._app_folder_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
+            self._global_dir = global_dir["id"]
+        if self._device_dirs_dir is None:
+            device_dirs_dir = self.drive_service.files().insert(body={"title":"device_dirs","parents":[{"id":self._app_folder_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
+            self._device_dirs_dir = device_dirs_dir["id"]
+        if self._device_dir is None:
+            device_dir = self.drive_service.files().insert(body={"title":device_name,"parents":[{"id":self._device_dirs_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
+            self._device_dir = device_dir["id"]
 
-                'mimeType': "application/vnd.google-apps.folder"
-            }
-            if parent is not None:
-                body["parents"] = [{"id":parent}]
-            directory = self.drive_service.files().insert(body=body).execute()
-            return directory["id"]
-            #self.client.file_create_folder(dirpath)
-
-    def _save_file(self,filepath,outpath=None):
-        return None
-        try:
-            if outpath is None:
-                outpath = os.path.basename(filepath)
-            with open(filepath,"rb") as f:
-                self.client.put_file(outpath,f,overwrite=True)
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                raise e
-
-    def _save_data(self,data,outpath):
-        try:
-            self.client.put_file(outpath,data,overwrite=True)
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                raise e
+    def _save_data(self,data,filename,directory,mimetype):
+        #media_body = MediaFileUpload(filename, mimetype=mime_type, resumable=True)
+        media_body = apiclient.http.MediaIoBaseUpload(StringIO.StringIO(data), mimetype=mimetype, resumable=True)
+        body = {'title': filename,
+                'mimeType': mimetype,
+                "parent": [{"id":directory}]}
+        self.drive_service.files().insert(body=body,media_body=media_body).execute()
+        
 
     def push_clip(self,data,format="txt",device=None):
-        now = datetime.datetime.utcnow()
-        filename = str(now)
         if device is not None:
-            path = "hoverboard/device_dirs/{}/{}.{}".format(device,filename,format)
+            files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device),folderId=self._device_dirs_dir).execute()
+            if len(files["items"]):
+                directory = files["items"][0]["id"]
+            else:
+                # This shouldn't occur, but if it does we want to know about it
+                raise ValueError
         else:
-            path = "hoverboard/global/{}.{}".format(filename,format)
-        self._save_data(data,path)
+            directory = self._global_dir
+        now = datetime.datetime.utcnow()
+        filename = "{}.{}".format(str(now),format)
+        mimetype = self._format_mimetypes[format]
+        self._save_data(data,filename,directory,mimetype)
 
     def remove_clip(self,filedata):
-        try:
-            self.client.file_delete(filedata.path)
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                raise e
+        self.drive_service.files().delete(fileId=filedata.path).execute()
 
     def _get_file(self,filename,path):
         try:
@@ -169,16 +168,12 @@ class Backend(object):
             else:
                 raise e
 
-    def _get_file_data(self,filename):
-        try:
-            hfile = self.client.get_file(filename)
-            data = hfile.read()
-            return data
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                raise e
+    def _get_file_data(self,download_url):
+        resp, content = service._http.request(download_url)
+        if resp.status == 200:
+          return content
+        else:
+          return None
 
     def pull_clip(self,filedata):
         return self._get_file_data(filedata.path)
@@ -197,18 +192,30 @@ class Backend(object):
                 else:
                     self.files[path] = plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"],filedata["is_dir"])
 
-    def list_clips(self,device_name=None):
-        try:
-            self._refresh_files()
-            if device_name is None:
-                return [x for x in self.files.values() if x.path.startswith("hoverboard/global/")]
+    def list_clips(self,device_name=None,formats=None):
+        if device_name is not None:
+            files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device_name),folderId=self._device_dirs_dir).execute()
+            if len(files["items"]):
+                directory = files["items"][0]["id"]
             else:
-                return [x for x in self.files.values() if x.path.startswith("hoverboard/device_dirs/{}/".format(device_name))]
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                raise e
+                # This shouldn't occur, but if it does we want to know about it
+                raise ValueError
+        else:
+            directory = self._global_dir
+
+        if formats is None:
+            query = ""
+        else:
+            query = "and ({})".format(" or ".join("mimtetype = {}".format(self._format_mimetypes[x]) for x in formats))
+        files = self.drive_service.files().list(q="'{}' in parents {}".format(directory,query),fields="items(modifiedDate,title,downloadUrl,fileSize)").execute()
+        print files
+        #print files["items"][0]["modifiedDate"]
+        return [plugin.FileDescription(x["title"],x["title"].split(".")[-1],x["modifiedDate"],x["fileSize"],False,{"downloadUrl":x["downloadUrl"]}) for x in files["items"]]
+        # self._refresh_files()
+        # if device_name is None:
+        #     return [x for x in self.files.values() if x.path.startswith("hoverboard/global/")]
+        # else:
+        #     return [x for x in self.files.values() if x.path.startswith("hoverboard/device_dirs/{}/".format(device_name))]
 
     def _list_dirs(self):
         self._refresh_files()
@@ -240,6 +247,7 @@ class Backend(object):
                 raise e
 
     def check_validity(self):
+        return True
         try:
             self.client.account_info()
             return True
@@ -250,8 +258,10 @@ class Backend(object):
                 return False
 
     def get_devices(self,device_name):
+        return []
         self._refresh_files()
         return [plugin.Device(x.path.split("/")[-1],x.modified) for x in self.files.values() if x.path.startswith("hoverboard/devices/") and x.path.split("/")[-1] != device_name]
 
     def checkin(self,device_name):
+        return
         self._save_data("{}".format(datetime.datetime.utcnow()),"hoverboard/devices/{}".format(device_name))
