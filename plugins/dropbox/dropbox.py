@@ -106,7 +106,7 @@ class Backend(object):
 
     def remove_clip(self,filedata):
         try:
-            self.client.file_delete(filedata.path)
+            self.client.file_delete(filedata.extra_data["path"])
         except dropboxlib.rest.ErrorResponse as e:
             if e.status == 401:
                 raise exceptions.AccessRevokedException()
@@ -197,7 +197,7 @@ class Backend(object):
 
     def get_devices(self,device_name):
         self._refresh_files()
-        return [plugin.Device(x.path.split("/")[-1],x.modified) for x in self.files.values() if x.path.startswith("/devices/") and x.path.split("/")[-1] != device_name]
+        return [plugin.Device(x.name,x.modified) for x in self.files.values() if x.extra_data["path"].startswith("/devices/") and x.name != device_name]
 
     def checkin(self,device_name):
         self._save_data("{}".format(datetime.datetime.utcnow()),"devices/{}".format(device_name))

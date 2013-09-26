@@ -128,7 +128,6 @@ class PullClipThread(threading.Thread):
                 if files:
                     filedesc = files[-1]
                     if filedesc.modified > last_modified or retry:
-                        path = filedesc.path
                         data = hoverboard.backend.pull_clip(filedesc)
                         if device is None:
                             hoverboard.last_modified = filedesc.modified
