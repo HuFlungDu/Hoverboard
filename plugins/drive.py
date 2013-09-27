@@ -179,20 +179,6 @@ class Backend(object):
     def pull_clip(self,filedata):
         return self._get_file_data(filedata.extra_data["downloadUrl"])
 
-    def _refresh_files(self):
-        has_more = True
-        while has_more:
-            delta = self.client.delta(self.delta)
-            entries, reset, self.delta, has_more = delta["entries"], delta["reset"], delta["cursor"], delta["has_more"]
-            for path,filedata in entries:
-                if filedata is None:
-                    try:
-                        del(self.files[path])
-                    except:
-                        pass
-                else:
-                    self.files[path] = plugin.FileDescription(filedata["path"],datetime.datetime.strptime(filedata["modified"], "%a, %d %b %Y %H:%M:%S +0000"),filedata["bytes"],filedata["is_dir"])
-
     def list_clips(self,device_name=None,formats=None):
         if device_name is not None:
             with self._lock:
@@ -211,41 +197,12 @@ class Backend(object):
             query = "and ({})".format(" or ".join("mimtetype = {}".format(self._format_mimetypes[x]) for x in formats))
         with self._lock:
             files = self.drive_service.files().list(q="'{}' in parents {}".format(directory,query),fields="items(modifiedDate,title,downloadUrl,fileSize,id)").execute()
-        return [plugin.FileDescription(x["title"],x["title"].split(".")[-1],x["modifiedDate"],int(x["fileSize"]),False,{"downloadUrl":x["downloadUrl"],"id":x["id"]}) for x in files["items"]]
-        # self._refresh_files()
-        # if device_name is None:
-        #     return [x for x in self.files.values() if x.path.startswith("hoverboard/global/")]
-        # else:
-        #     return [x for x in self.files.values() if x.path.startswith("hoverboard/device_dirs/{}/".format(device_name))]
-
-    def _list_dirs(self):
-        self._refresh_files()
-        return [x for x in self.files.values() if x.is_dir]
+        return [plugin.FileDescription(x["title"],x["title"].split(".")[-1],datetime.datetime.strptime(x["modifiedDate"], "%Y-%m-%dT%H:%M:%S.%fZ"),int(x["fileSize"]),False,{"downloadUrl":x["downloadUrl"],"id":x["id"]}) for x in files["items"]]
 
     def get_connection_data(self):
         #Compared to dropbox, the drive API and accompanying docuementation is... Rudimentary.
         data = {"json":self.credentials.to_json()}
         return data
-
-    def _get_latest_file(self,path):
-        try:
-            filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
-            return self.get_file(filename,path)
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                raise e
-
-    def _get_latest_file_data(self):
-        try:
-            filename = sorted(self.list_files(), key=lambda x: x.modified, reverse=True)[0].path
-            return self.get_file_data(filename)
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                raise e
 
     def check_validity(self):
         return True
@@ -259,10 +216,15 @@ class Backend(object):
                 return False
 
     def get_devices(self,device_name):
-        return []
-        self._refresh_files()
-        return [plugin.Device(x.path.split("/")[-1],x.modified) for x in self.files.values() if x.path.startswith("hoverboard/devices/") and x.path.split("/")[-1] != device_name]
+        with self._lock:
+            files = self.drive_service.files().list(q="'{}' in parents".format(self._devices_dir),fields="items(modifiedDate,title)").execute()
+        return [plugin.Device(x["title"],datetime.datetime.strptime(x["modifiedDate"], "%Y-%m-%dT%H:%M:%S.%fZ")) for x in files["items"]]
 
     def checkin(self,device_name):
-        return
-        self._save_data("{}".format(datetime.datetime.utcnow()),)
+        with self._lock:
+            files = self.drive_service.files().list(q="'{}' in parents and title = '{}'".format(self._devices_dir,device_name),fields="items(id)").execute()
+        if len(files["items"]):
+            with self._lock:
+                self.drive_service.files().insert(fileId=files["items"][0]["id"]).execute()
+        else:
+            self._save_data("{}".format(datetime.datetime.utcnow()),device_name,self._devices_dir,"text/plain")
