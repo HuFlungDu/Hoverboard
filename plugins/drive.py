@@ -3,6 +3,7 @@ import base64
 import time
 import datetime
 import json
+import threading
 
 import httplib2
 
@@ -37,6 +38,8 @@ class Backend(object):
         self._global_dir = None
         self._device_dirs_dir = None
         self._device_dir = None
+        # Drive doesn't like you to do two things at once, so we're going to lock all the network operations
+        self._lock = threading.Lock()
 
     def resume(self, init_data,device_name):
         json_data = init_data.get("json")
@@ -47,10 +50,6 @@ class Backend(object):
         assert self.check_validity()
         self._identify_directories(device_name)
         self._make_initial_directories(device_name)
-        # self._devices_dir = self._make_dir("devices",self._hoverboard_dir)
-        # self._global_dir = self._make_dir("global",self._hoverboard_dir)
-        # self._device_dirs_dir = self._make_dir("device_dirs",self._hoverboard_dir)
-        # self._make_dir("{}".format(device_name),self._device_dirs_dir)
 
     def create_new(self,device_name):
         flow = OAuth2WebServerFlow(self._CLIENT_ID, self._CLIENT_SECRET, self._OAUTH_SCOPE, self._REDIRECT_URI)
@@ -88,20 +87,12 @@ class Backend(object):
         self._identify_directories(device_name)
         self._make_initial_directories(device_name)
 
-        # self._make_dir("hoverboard",True)
-        # self._make_dir("hoverboard/devices",True)
-        # self._make_dir("hoverboard/global",True)
-        # self._make_dir("hoverboard/device_dirs",True)
-        # self._make_dir("hoverboard/device_dirs/{}".format(device_name),True)
-
-        
-        # webbrowser.open_new_tab(url)
-        # self.access_token = sess.obtain_access_token(request_token)
-
     def _identify_directories(self,device_name):
-        appdata_folder = self.drive_service.files().get(fileId='appdata').execute()
+        with self._lock:
+            appdata_folder = self.drive_service.files().get(fileId='appdata').execute()
         self._app_folder_dir = appdata_folder['id']
-        files = self.drive_service.files().list(q="'{}' in parents and mimeType = 'application/vnd.google-apps.folder' and (title = 'devices' or title = 'global' or title = 'device_dirs')".format(self._app_folder_dir),fields="items(title,id)").execute()
+        with self._lock:
+            files = self.drive_service.files().list(q="'{}' in parents and mimeType = 'application/vnd.google-apps.folder' and (title = 'devices' or title = 'global' or title = 'device_dirs')".format(self._app_folder_dir),fields="items(title,id)").execute()
         devices = [__ for __ in files["items"] if __["title"] == "devices"]
         if len(devices):
             self._devices_dir = devices[0]["id"]
@@ -112,36 +103,46 @@ class Backend(object):
         if len(device_dirs):
             self._device_dirs_dir = device_dirs[0]["id"]
         if self._device_dirs_dir is not None:
-            files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device_name),folderId=self._device_dirs_dir).execute()
+            with self._lock:
+                files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device_name),folderId=self._device_dirs_dir).execute()
             if len(files["items"]):
                 self._device_dirs_dir = files["items"][0]["id"]
 
     def _make_initial_directories(self,device_name):
         if self._devices_dir is None:
-            devices_dir = self.drive_service.files().insert(body={"title":"devices","parents":[{"id":self._app_folder_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
+            with self._lock:
+                devices_dir = self.drive_service.files().insert(body={"title":"devices","parents":[{"id":self._app_folder_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
             self._devices_dir = devices_dir["id"]
         if self._global_dir is None:
-            global_dir = self.drive_service.files().insert(body={"title":"global","parents":[{"id":self._app_folder_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
+            with self._lock:
+                global_dir = self.drive_service.files().insert(body={"title":"global","parents":[{"id":self._app_folder_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
             self._global_dir = global_dir["id"]
         if self._device_dirs_dir is None:
-            device_dirs_dir = self.drive_service.files().insert(body={"title":"device_dirs","parents":[{"id":self._app_folder_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
+            with self._lock:
+                device_dirs_dir = self.drive_service.files().insert(body={"title":"device_dirs","parents":[{"id":self._app_folder_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
             self._device_dirs_dir = device_dirs_dir["id"]
         if self._device_dir is None:
-            device_dir = self.drive_service.files().insert(body={"title":device_name,"parents":[{"id":self._device_dirs_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
+            with self._lock:
+                device_dir = self.drive_service.files().insert(body={"title":device_name,"parents":[{"id":self._device_dirs_dir}], "mimeType":"application/vnd.google-apps.folder"}).execute()
             self._device_dir = device_dir["id"]
 
     def _save_data(self,data,filename,directory,mimetype):
         #media_body = MediaFileUpload(filename, mimetype=mime_type, resumable=True)
-        media_body = apiclient.http.MediaIoBaseUpload(StringIO.StringIO(data), mimetype=mimetype, resumable=True)
+        media_body = apiclient.http.MediaIoBaseUpload(fd=StringIO.StringIO(data), mimetype=mimetype, resumable=True)
         body = {'title': filename,
                 'mimeType': mimetype,
-                "parent": [{"id":directory}]}
-        self.drive_service.files().insert(body=body,media_body=media_body).execute()
+                "parents": [{"id":directory}]}
+        # Getting an SSL wrong version number or some such here. I've gotten it to upload once, but I have no idea how.
+        # Works in the demo...
+        with self._lock:
+            file = self.drive_service.files().insert(body=body,media_body=media_body).execute()
+        print file
         
 
     def push_clip(self,data,format="txt",device=None):
         if device is not None:
-            files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device),folderId=self._device_dirs_dir).execute()
+            with self._lock:
+                files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device),folderId=self._device_dirs_dir).execute()
             if len(files["items"]):
                 directory = files["items"][0]["id"]
             else:
@@ -155,7 +156,8 @@ class Backend(object):
         self._save_data(data,filename,directory,mimetype)
 
     def remove_clip(self,filedata):
-        self.drive_service.files().delete(fileId=filedata.path).execute()
+        with self._lock:
+            self.drive_service.files().delete(fileId=filedata.extra_data["id"]).execute()
 
     def _get_file(self,filename,path):
         try:
@@ -176,7 +178,7 @@ class Backend(object):
           return None
 
     def pull_clip(self,filedata):
-        return self._get_file_data(filedata.path)
+        return self._get_file_data(filedata.extra_data["downloadUrl"])
 
     def _refresh_files(self):
         has_more = True
@@ -194,7 +196,8 @@ class Backend(object):
 
     def list_clips(self,device_name=None,formats=None):
         if device_name is not None:
-            files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device_name),folderId=self._device_dirs_dir).execute()
+            with self._lock:
+                files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device_name),folderId=self._device_dirs_dir).execute()
             if len(files["items"]):
                 directory = files["items"][0]["id"]
             else:
@@ -207,10 +210,9 @@ class Backend(object):
             query = ""
         else:
             query = "and ({})".format(" or ".join("mimtetype = {}".format(self._format_mimetypes[x]) for x in formats))
-        files = self.drive_service.files().list(q="'{}' in parents {}".format(directory,query),fields="items(modifiedDate,title,downloadUrl,fileSize)").execute()
-        print files
-        #print files["items"][0]["modifiedDate"]
-        return [plugin.FileDescription(x["title"],x["title"].split(".")[-1],x["modifiedDate"],x["fileSize"],False,{"downloadUrl":x["downloadUrl"]}) for x in files["items"]]
+        with self._lock:
+            files = self.drive_service.files().list(q="'{}' in parents {}".format(directory,query),fields="items(modifiedDate,title,downloadUrl,fileSize,id)").execute()
+        return [plugin.FileDescription(x["title"],x["title"].split(".")[-1],x["modifiedDate"],int(x["fileSize"]),False,{"downloadUrl":x["downloadUrl"],"id":x["id"]}) for x in files["items"]]
         # self._refresh_files()
         # if device_name is None:
         #     return [x for x in self.files.values() if x.path.startswith("hoverboard/global/")]
@@ -264,4 +266,4 @@ class Backend(object):
 
     def checkin(self,device_name):
         return
-        self._save_data("{}".format(datetime.datetime.utcnow()),"hoverboard/devices/{}".format(device_name))
+        self._save_data("{}".format(datetime.datetime.utcnow()),)
