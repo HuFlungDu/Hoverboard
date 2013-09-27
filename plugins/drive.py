@@ -135,8 +135,7 @@ class Backend(object):
         # Getting an SSL wrong version number or some such here. I've gotten it to upload once, but I have no idea how.
         # Works in the demo...
         with self._lock:
-            file = self.drive_service.files().insert(body=body,media_body=media_body).execute()
-        print file
+            self.drive_service.files().insert(body=body,media_body=media_body).execute()
         
 
     def push_clip(self,data,format="txt",device=None):
