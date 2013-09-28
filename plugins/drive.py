@@ -1,4 +1,5 @@
 from hoverboard import plugin
+from hoverboard import exceptions
 import base64
 import time
 import datetime
@@ -127,13 +128,10 @@ class Backend(object):
             self._device_dir = device_dir["id"]
 
     def _save_data(self,data,filename,directory,mimetype):
-        #media_body = MediaFileUpload(filename, mimetype=mime_type, resumable=True)
         media_body = apiclient.http.MediaIoBaseUpload(fd=StringIO.StringIO(data), mimetype=mimetype, resumable=True)
         body = {'title': filename,
                 'mimeType': mimetype,
                 "parents": [{"id":directory}]}
-        # Getting an SSL wrong version number or some such here. I've gotten it to upload once, but I have no idea how.
-        # Works in the demo...
         with self._lock:
             self.drive_service.files().insert(body=body,media_body=media_body).execute()
         
@@ -158,19 +156,8 @@ class Backend(object):
         with self._lock:
             self.drive_service.files().delete(fileId=filedata.extra_data["id"]).execute()
 
-    def _get_file(self,filename,path):
-        try:
-            hfile = self.client.get_file(filename)
-            data = hfile.read()
-            os.path.join(path,filename).write(data)
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                raise e
-
     def _get_file_data(self,download_url):
-        resp, content = service._http.request(download_url)
+        resp, content = self._drive_service._http.request(download_url)
         if resp.status == 200:
           return content
         else:
@@ -205,26 +192,23 @@ class Backend(object):
         return data
 
     def check_validity(self):
+        self.drive_service.about().get().execute()
         return True
-        try:
-            self.client.account_info()
-            return True
-        except dropboxlib.rest.ErrorResponse as e:
-            if e.status == 401:
-                raise exceptions.AccessRevokedException()
-            else:
-                return False
 
     def get_devices(self,device_name):
         with self._lock:
             files = self.drive_service.files().list(q="'{}' in parents".format(self._devices_dir),fields="items(modifiedDate,title)").execute()
-        return [plugin.Device(x["title"],datetime.datetime.strptime(x["modifiedDate"], "%Y-%m-%dT%H:%M:%S.%fZ")) for x in files["items"]]
+        return [plugin.Device(x["title"],datetime.datetime.strptime(x["modifiedDate"], "%Y-%m-%dT%H:%M:%S.%fZ")) for x in files["items"] if x["title"] != device_name]
 
     def checkin(self,device_name):
+        # This is a workaround since there is a bug with filtering on parent and title here.
+        fileid = None
         with self._lock:
-            files = self.drive_service.files().list(q="'{}' in parents and title = '{}'".format(self._devices_dir,device_name),fields="items(id)").execute()
+            files = self.drive_service.files().list(q="'{}' in parents".format(self._devices_dir,device_name),fields="items(title,id)").execute()
         if len(files["items"]):
+            fileid = next((x for x in files["items"] if x["title"] == device_name),None)
+        if fileid is not None:
             with self._lock:
-                self.drive_service.files().insert(fileId=files["items"][0]["id"]).execute()
+                self.drive_service.files().touch(fileId=fileid["id"]).execute()
         else:
             self._save_data("{}".format(datetime.datetime.utcnow()),device_name,self._devices_dir,"text/plain")
