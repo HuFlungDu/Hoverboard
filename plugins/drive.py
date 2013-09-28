@@ -107,7 +107,7 @@ class Backend(object):
             with self._lock:
                 files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device_name),folderId=self._device_dirs_dir).execute()
             if len(files["items"]):
-                self._device_dirs_dir = files["items"][0]["id"]
+                self._device_dir = files["items"][0]["id"]
 
     def _make_initial_directories(self,device_name):
         if self._devices_dir is None:
@@ -135,16 +135,21 @@ class Backend(object):
         with self._lock:
             self.drive_service.files().insert(body=body,media_body=media_body).execute()
         
-
-    def push_clip(self,data,format="txt",device=None):
-        if device is not None:
-            with self._lock:
-                files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device),folderId=self._device_dirs_dir).execute()
+    def _get_device_dir(self,device):
+        with self._lock:
+            files = self.drive_service.files().list(q="'{}' in parents and mimeType = 'application/vnd.google-apps.folder'".format(self._device_dirs_dir), fields="items(id,title)").execute()
             if len(files["items"]):
-                directory = files["items"][0]["id"]
+                directory = next((x for x in files["items"] if x["title"] == device),None)
+            if directory is not None:
+                directory = directory["id"]
             else:
                 # This shouldn't occur, but if it does we want to know about it
                 raise ValueError
+        return directory
+
+    def push_clip(self,data,format="txt",device=None):
+        if device is not None:
+            directory = self._get_device_dir(device)
         else:
             directory = self._global_dir
         now = datetime.datetime.utcnow()
@@ -157,7 +162,7 @@ class Backend(object):
             self.drive_service.files().delete(fileId=filedata.extra_data["id"]).execute()
 
     def _get_file_data(self,download_url):
-        resp, content = self._drive_service._http.request(download_url)
+        resp, content = self.drive_service._http.request(download_url)
         if resp.status == 200:
           return content
         else:
@@ -167,14 +172,9 @@ class Backend(object):
         return self._get_file_data(filedata.extra_data["downloadUrl"])
 
     def list_clips(self,device_name=None,formats=None):
+        directory = None
         if device_name is not None:
-            with self._lock:
-                files = self.drive_service.children().list(q="mimeType = 'application/vnd.google-apps.folder' and title = '{}'".format(device_name),folderId=self._device_dirs_dir).execute()
-            if len(files["items"]):
-                directory = files["items"][0]["id"]
-            else:
-                # This shouldn't occur, but if it does we want to know about it
-                raise ValueError
+            directory = self._get_device_dir(device_name)
         else:
             directory = self._global_dir
 
@@ -192,7 +192,8 @@ class Backend(object):
         return data
 
     def check_validity(self):
-        self.drive_service.about().get().execute()
+        with self._lock:
+            self.drive_service.about().get().execute()
         return True
 
     def get_devices(self,device_name):
