@@ -260,6 +260,7 @@ class InitBackendWindow(wx.Frame):
             self.Show(True)
 
     def on_cancel_button_clicked(self,button):
+        globals()["backend"] = None
         wx.CallAfter(self.Destroy)
         wx.CallAfter(self.app.Exit)
 

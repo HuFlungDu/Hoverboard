@@ -17,6 +17,7 @@ backend = None
 last_modified = datetime.datetime.min
 last_modified_device = datetime.datetime.min
 last_checkin = datetime.datetime.min
+last_device_check = datetime.datetime.min
 last_pulled = None
 access_revoked = False
 pull_threads = []
@@ -72,12 +73,14 @@ class CleanupThread(threading.Thread):
                 break
             try:
                 if hoverboard.backend is not None:
-                    timedelta = datetime.datetime.now() - hoverboard.last_checkin
+                    timedelta = datetime.datetime.now() - hoverboard.last_device_check
                     # Not strictly cleanup, but I don't feel like starting up another thread.
-                    # Check for devices every twoish minutes
-                    if (timedelta.days * 86400 + timedelta.seconds)/60 > 2:
+                    # Check for devices every thirtyish seconds. Used to be longer, but if you just installed a device, this can get unbearable.
+                    if (timedelta.days * 86400 + timedelta.seconds) > 30:
                         hoverboard.devices = sorted(hoverboard.backend.get_devices(self.device_name), key=lambda x: x.last_checkin,reverse=True)
-                    
+                        hoverboard.last_device_check = datetime.datetime.now()
+                        
+                    timedelta = datetime.datetime.now() - hoverboard.last_checkin
                     # Check in every tenish minutes
                     if (timedelta.days * 86400 + timedelta.seconds)/60 > 10:
                         hoverboard.backend.checkin(hoverboard.settings.device_name)
