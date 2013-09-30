@@ -26,4 +26,4 @@ Requirements
 
 License
 -------
-The Dropbox Core API code included in this repo is licensed under the MIT license, available in the directory. The remainder of the code written by me is released into the public domain, DWTFYW.
+The Dropbox Core API code included in this repo is licensed under the MIT license, available in the directory. The google drive API code is licensed under the apache commons license v2, available in the directory. httplib2 is also licensed under the MIT license. The remainder of the code written by me is released into the public domain, DWTFYW.
