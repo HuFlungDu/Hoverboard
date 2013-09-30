@@ -5,17 +5,19 @@ import time
 import datetime
 import json
 import threading
+import sys
+import os
 
+old_path = sys.path
+sys.path = sys.path+[os.path.dirname(__file__),os.path.join(os.path.dirname(__file__),"googledrive")]
 import httplib2
+from googledrive import oauth2client
+from googledrive import apiclient
+from googledrive.apiclient.discovery import build
+from googledrive.oauth2client.client import OAuth2WebServerFlow
+sys.path = old_path
 
-import oauth2client
-import apiclient
-from apiclient.discovery import build
-from oauth2client.client import OAuth2WebServerFlow
 import StringIO
-
-plugin_name = "Google Drive"
-plugin_type = plugin.BACKEND_PLUGIN
 
 
 
