@@ -9,7 +9,8 @@ import getpass
 import platform
 
 import logging
-
+#MOVE ME BACK WHEN WX GETS BETTER!
+app = wx.App()
 # Look here first
 sys.path.insert(0,os.path.dirname(__file__))
 import hoverboard
@@ -449,13 +450,14 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
     global backend
+    global app
     parser = argparse.ArgumentParser(description='Cloud based clipboard syncing.')
     parser.add_argument('-c, --config', dest="config", type=str, nargs='?',
                        help='config file for hoverboard')
     args = parser.parse_args(args=argv[1:])
     settings = Settings.from_xml(settingstext)
     hoverboard.init(args,settings,os.path.join(os.path.dirname(__file__),"plugins"))
-    app = wx.App()
+    #app = wx.App()
     app.SetTopWindow(None)
     # wx is a dummy dummy
     frame = wx.Frame(None)

@@ -24,9 +24,6 @@ try:
             #     _backend="gtk3"
             # except:
             # Gtk 3 is acting funny with the clipboard. Timeout until it behaves.
-            import wx
-            assert wx.VERSION[0] < 3
-            # Gtk 2 now causes a segfault when imported before wx, making this module entirely useless until it gets fixed. No picture copying for Linux users.
             import gtk
             _backend="gtk2"
             
