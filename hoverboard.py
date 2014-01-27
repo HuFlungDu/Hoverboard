@@ -14,11 +14,16 @@ import logging
 #MOVE ME BACK WHEN WX GETS BETTER!
 app = wx.App()
 # Look here first
-try:
-   if sys.frozen or sys.importers:
-      SCRIPT_ROOT = os.path.dirname(sys.executable)
-except AttributeError:
-   SCRIPT_ROOT = os.path.dirname(os.path.realpath(__file__))
+if hasattr(sys,"frozen") and sys.frozen in ("windows_exe", "console_exe"):
+    SCRIPT_ROOT = os.path.dirname(sys.executable)
+    environ="py2exe"
+elif hasattr(sys,"frozen") and sys.frozen == "macosx_app":
+    SCRIPT_ROOT = os.path.dirname(os.path.realpath(__file__))
+    environ = "py2app"
+else:
+    SCRIPT_ROOT = os.path.dirname(os.path.realpath(__file__))
+    environ = "script"
+
 sys.path.insert(0,SCRIPT_ROOT)
 import hoverboard
 from hoverboard import exceptions
@@ -660,8 +665,12 @@ def create_menu_item(mainmenu,menu, label, func, bitmap=None):
     if bitmap is not None:
         item.SetBitmap(bitmap)
     if func is not None:
-        # Needs to be bound to the top level menu on windows? I dunno, whatever.
-        mainmenu.Bind(wx.EVT_MENU, func, id=item.GetId())
+        if os.name != "posix":
+            # Needs to be bound to the top level menu on windows? I dunno, whatever.
+            mainmenu.Bind(wx.EVT_MENU, func, id=item.GetId())
+        else:
+            #Everything else, logically, needs to be on the direct submenu
+            menu.Bind(wx.EVT_MENU, func, id=item.GetId())
     menu.AppendItem(item)
     return item
 
@@ -722,6 +731,7 @@ class TaskBarIcon(wx.TaskBarIcon):
             self.SetIcon(icon.getTrayIconIcon(),"Hoverboard")
 
     def on_push(self,event,device):
+        print "here"
         cp = clipboard.Clipboard()
         clip = clipcatcher.try_catch_clip(cp,True)
         if clip is not None:
