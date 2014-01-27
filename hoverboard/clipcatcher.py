@@ -11,7 +11,6 @@ def get_clip_content(cp, force=False):
     global content
     if cp.open():
         available = cp.get_available()
-        print available
         if available == clipboard.CP_TEXT:
             newcontent = cp.get_data()
             if newcontent != content or force:
